@@ -1,0 +1,30 @@
+name: idp
+channels:
+  - https://software.repos.intel.com/python/conda
+  - conda-forge
+dependencies:
+  # System requirements:
+  - python=3.10
+  - pip>=24.0
+  # Intel requirements:
+  - intelpython~=2024.2.0
+  - intelpython3_core~=2024.2.0
+  - scipy==1.10.1
+  - scikit-learn-intelex~=2024.7.0
+  - scikit-learn~=1.4.2
+  - scikit-image~=0.24.0
+  # Requirements for Snakemake:
+  - pulp==2.7.0
+  - bioconda::snakemake-minimal~=7.32.4
+  # Own requirements:
+  - configargparse~=1.7.0
+  - platformdirs~=4.3.6
+  - requests~=2.32.3
+  - tqdm~=4.67.1
+  # Dependency requirements:
+  - nibabel~=5.3.2
+  - matplotlib~=3.5.3
+  - pandas~=1.5.3
+  - pip:
+      - antspyx==0.4.2
+      - voxelmorph@git+https://github.com/ClandininLab/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c

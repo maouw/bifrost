@@ -9,6 +9,8 @@ import os
 import numpy as np
 
 import bifrost
+import platformdirs
+from pathlib import Path
 
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
@@ -158,3 +160,12 @@ class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
         if action.nargs == argparse.PARSER:
             parts = "\n".join(parts.split("\n")[1:])
         return parts
+
+
+def get_default_bifrost_weights_path():
+    """Returns the default path to the Bifrost weights file"""
+
+    # Use platformdirs to get the site data path for Bifrost
+    bifrost_data_dir = platformdirs.site_data_path("bifrost")
+    return bifrost_data_dir / "weights" / "shapes.h5"
+

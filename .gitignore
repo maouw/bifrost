@@ -133,3 +133,7 @@ dmypy.json
 .#*
 
 .DS_store
+
+# h5 files
+*.h5
+

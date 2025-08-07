@@ -6,7 +6,7 @@ Execute using the 'bifrost' executable installed by setuptools
 import argparse
 import sys
 
-from bifrost.util import SubcommandHelpFormatter
+from bifrost.util import SubcommandHelpFormatter, get_default_bifrost_weights_path
 
 
 def main():
@@ -55,7 +55,9 @@ def main():
 
     results_dir_help = "Absolute path to write results"
     parser_register.add_argument("results_dir", help=results_dir_help)
-
+    
+    parser_register.add_argument("--weights", help=f"Path to weights file. If not specified, uses default BIFROST weights at {get_default_bifrost_weights_path()}", default=str(get_default_bifrost_weights_path()),  type=str)
+    
     clahe_kernel_size_help = (
         "Kernel size for contrast-limited adaptive histogram equalization. "
         "See https://scikit-image.org/docs/stable/api/skimage.exposure.html#skimage.exposure.equalize_hist for details"

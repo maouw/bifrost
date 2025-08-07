@@ -28,7 +28,10 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 TARGET_SHAPE = (160, 160, 192)
 DEVICE = "/CPU:0"
-MODEL_WEIGHTS_PATH = f"{package_path()}/weights/synthmorph_weights.h5"
+
+# Default BIFROST weights path
+DEFAULT_BIFROST_WEIGHTS_PATH = get_default_bifrost_weights_path("shapes.h5")
+BIFROST_WEIGHTS_PATH = Path(os.environ.get("BIFROST_WEIGHTS_PATH", DEFAULT_BIFROST_WEIGHTS_PATH)).resolve()
 
 
 def register(args):
@@ -79,10 +82,15 @@ def register(args):
             return
     else:
         os.makedirs(results_dir)
-
-    if not os.path.exists(MODEL_WEIGHTS_PATH):
-        logger.info("Downloading synthmorph weights to %s", MODEL_WEIGHTS_PATH)
-        download_weights()
+        
+    if args.weights is not None:
+        BIFROST_WEIGHTS_PATH = Path(args.weights).resolve()
+        logger.info("Using custom weights from %s", BIFROST_WEIGHTS_PATH)
+    else:
+        logger.info("Using default BIFROST weights from %s", BIFROST_WEIGHTS_PATH)
+    
+    if not BIFROST_WEIGHTS_PATH.exists():
+        raise FileNotFoundError(f"Bifrost weights not found at {BIFROST_WEIGHTS_PATH}. Have you downloaded them?")
 
     # ========================================================================== #
     #                          INPUT VALIDATION                                  #
@@ -414,7 +422,7 @@ def register(args):
 
             with tf.device(DEVICE):
                 # load model
-                model = vxm.networks.VxmDense.load(MODEL_WEIGHTS_PATH)
+                model = vxm.networks.VxmDense.load(BIFROST_WEIGHTS_PATH)
 
                 logger.info("Running inference")
 

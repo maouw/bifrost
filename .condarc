@@ -1,0 +1,9 @@
+channels:
+  - 'https://software.repos.intel.com/python/conda'
+  - 'conda-forge'
+allow_non_channel_urls: true
+show_channel_urls: true
+channel_priority: strict
+prefix_data_interoperability: true
+update_modifier: freeze_installed
+
