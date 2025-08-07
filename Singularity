@@ -37,6 +37,7 @@ From: intel/intel-optimized-tensorflow:2.15.1-idp-base
     rm -rf /var/lib/apt/lists/*
 
     # Update conda
+    export PIP_ROOT_USER_ACTION=ignore
     export CI=1 MAMBA_ROOT_PREFIX="/opt/conda" && \
     conda config --system --set auto_update_conda false && \
     mamba update -n base -c conda-forge conda mamba
@@ -48,7 +49,7 @@ From: intel/intel-optimized-tensorflow:2.15.1-idp-base
     export CONDA_DEFAULT_ENV=idp
     cd /src/bifrost && \
     cp .condarc "/opt/conda/envs/${CONDA_DEFAULT_ENV}/.condarc" && \
-    conda env update -y -n "${CONDA_DEFAULT_ENV}" -f add-environment-intel.yml && \
+    conda env update -n "${CONDA_DEFAULT_ENV}" -f add-environment-intel.yml && \
     conda clean -y --all
 
     # Install BIFROST

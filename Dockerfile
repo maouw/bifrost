@@ -21,7 +21,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
     rm -rf /var/lib/apt/lists/*
 
 # Install dependencies and setup environment
-RUN export CI=1 MAMBA_ROOT_PREFIX=/opt/conda && \
+RUN export CI=1 MAMBA_ROOT_PREFIX=/opt/conda PIP_ROOT_USER_ACTION=ignore && \
     conda config --system --set auto_update_conda false && \
     mamba update -n base -c conda-forge conda mamba
 
@@ -50,7 +50,8 @@ RUN cp .condarc "/opt/conda/envs/${CONDA_DEFAULT_ENV}/.condarc" && \
 
 # Install BIFROST
 COPY bifrost /src/bifrost/bifrost
-RUN conda run -n "${CONDA_DEFAULT_ENV}" pip install --no-cache-dir --no-deps --no-build-isolation -e .
+RUN export CI=1 PIP_ROOT_USER_ACTION=ignore && \
+    conda run -n "${CONDA_DEFAULT_ENV}" pip install --no-cache-dir --no-deps --no-build-isolation -e .
 
 # Set PATH
 ENV PATH="/opt/conda/envs/idp/bin:$PATH"
