@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.8.6,<0.9.0"]
+build-backend = "uv_build"
 
 [project]
 name = "bifrost"
-version = "0.1.1-alpha"
+version = "0.1.2-alpha"
 authors = [
   { name = "Altan Orhon", email = "alta@uw.edu" },
   { name = "Andrew Berger", email = "a5b@stanford.edu" },
@@ -31,8 +31,9 @@ dependencies = [
   "snakemake~=7.32.4",
   "tensorflow~=2.15.1",
   "tf-keras~=2.15.1",
-  "voxelmorph@git+https://github.com/ClandininLab/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
-  # ALTERNATIVE URL: "voxelmorph@git+https://github.com/maouw/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c", 
+  "voxelmorph@git+https://github.com/voxelmorph/voxelmorph.git@2462d54511b45cf4bc00aa7df992ca6301ccec39",
+#  "voxelmorph@git+https://github.com/ClandininLab/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
+  # ALTERNATIVE URL: "voxelmorph@git+https://github.com/maouw/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
   #"neurite@git+https://github.com/ClandininLab/neurite.git@40f054e3dd45a5bcc47999b549e2e60e05eaf4ce",
   # ALTERNATIVE URL: "neurite@git+https://github.com/ClandininLab/neurite.git@40f054e3dd45a5bcc47999b549e2e60e05eaf4ce"
 
@@ -45,10 +46,10 @@ dev = ["ipython", "mypy", "ruff"]
 Homepage = "https://github.com/ClandininLab/bifrost"
 "Source Code" = "https://github.com/maouw/bifrost"
 
-[tool.setuptools]
-packages = ["bifrost", "bifrost.cli"]
-zip-safe = true
-include-package-data = true
+# [tool.setuptools]
+# packages = ["bifrost", "bifrost.cli"]
+# zip-safe = true
+# include-package-data = true
 
 [project.scripts]
 bifrost = "bifrost.cli.bifrost:main"
