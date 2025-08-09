@@ -18,7 +18,7 @@ from skimage.exposure import equalize_adapthist
 
 from bifrost.io import (download_weights, guarded_ants_image_read, md5sum,
                         write_affine, write_image)
-from bifrost.util import package_path, transpose_image, update_image_array
+from bifrost.util import package_path, transpose_image, update_image_array, get_default_bifrost_weights_path
 
 # hide GPUs
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -82,13 +82,13 @@ def register(args):
             return
     else:
         os.makedirs(results_dir)
-        
+
     if args.weights is not None:
         BIFROST_WEIGHTS_PATH = Path(args.weights).resolve()
         logger.info("Using custom weights from %s", BIFROST_WEIGHTS_PATH)
     else:
         logger.info("Using default BIFROST weights from %s", BIFROST_WEIGHTS_PATH)
-    
+
     if not BIFROST_WEIGHTS_PATH.exists():
         raise FileNotFoundError(f"Bifrost weights not found at {BIFROST_WEIGHTS_PATH}. Have you downloaded them?")
 
