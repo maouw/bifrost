@@ -16,8 +16,8 @@ import tensorflow as tf
 import voxelmorph as vxm
 from skimage.exposure import equalize_adapthist
 
-from bifrost.io import download_weights, guarded_ants_image_read, md5sum, write_affine, write_image
-from bifrost.util import package_path, transpose_image, update_image_array, get_default_bifrost_weights_path
+from bifrost.io import guarded_ants_image_read, md5sum, write_affine, write_image
+from bifrost.util import get_default_bifrost_weights_path, transpose_image, update_image_array
 
 # hide GPUs
 os.environ["CUDA_VISIBLE_DEVICES"] = ""

@@ -235,7 +235,6 @@ def preprocess(args, input_path, output_path):
 
 def __legacy_preprocess(image):
     """Legacy preprocessing"""
-
     image_arr = image.numpy()
 
     # Blur brain and mask small values

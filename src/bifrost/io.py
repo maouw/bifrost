@@ -1,5 +1,4 @@
-"""
-Module for I/O related methods
+"""Module for I/O related methods
 """
 
 import hashlib
@@ -9,7 +8,6 @@ import urllib
 
 import ants
 import h5py
-import numpy as np
 
 from bifrost.util import package_path
 
