@@ -3,6 +3,7 @@
 Execute using the 'bifrost' executable installed by setuptools
 """
 
+import argparse
 import logging
 import os
 import shutil
@@ -11,7 +12,9 @@ from glob import glob
 
 import ants
 import numpy as np
+import numpy.typing as npt
 import scipy
+import scipy.ndimage
 from skimage.exposure import equalize_adapthist
 from skimage.filters import threshold_triangle as triangle
 from sklearn.preprocessing import quantile_transform
@@ -20,7 +23,8 @@ from bifrost.io import guarded_ants_image_read
 from bifrost.util import sha256, update_image_array
 
 
-def build_template(args):
+def build_template(args: argparse.Namespace) -> None:
+    
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -233,7 +237,7 @@ def preprocess(args, input_path, output_path):
     ants.image_write(image, output_path)
 
 
-def __legacy_preprocess(image):
+def __legacy_preprocess(image: ants.ANTsImage):
     """Legacy preprocessing."""
     image_arr = image.numpy()
 
@@ -245,7 +249,7 @@ def __legacy_preprocess(image):
 
     # Remove blobs outside contiguous brain
     labels, label_nb = scipy.ndimage.label(image_copy)
-    image_label = np.bincount(labels.flatten())[1:].argmax() + 1
+    image_label = (np.bincount(labels.flatten())[1:].argmax()) + 1
     image_copy = image_arr.copy().astype("float32")
     image_copy[np.where(labels != image_label)] = np.nan
 

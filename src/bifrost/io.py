@@ -3,49 +3,47 @@
 import hashlib
 import logging
 import os
-import urllib
 
 import ants
 import h5py
 
-from bifrost.util import package_path
 
-
-def write_affine(h5_handle, name, transform):
+def write_affine(h5_handle: h5py.File, name: str, transform: ants.ANTsTransform | str) -> None:
     """Write ANTs affine transform to h5.
 
     Args:
-      h5_handle: open file handle - h5py.File
-      name: name of group to create, absolute path - str
-      transform: if str interpreted as path to .mat file - ANTsTransform or str
-    """
-    assert isinstance(h5_handle, h5py.File)
-    assert isinstance(transform, ants.ANTsTransform | str)
+        h5_handle: open file handle - h5py.File
+        name: name of group to create, absolute path - str
+        transform: if str interpreted as path to .mat file - ANTsTransform or str
 
+    Returns:
+        None
+    
+    """
     if isinstance(transform, str):
         transform = ants.read_transform(transform)
+    
 
     h5_handle.create_group(name)
-    h5_handle.create_dataset(f"{name}/parameters", data=transform.parameters)
-    h5_handle.create_dataset(f"{name}/fixed_parameters", data=transform.fixed_parameters)
+    h5_handle.create_dataset(f"{name}/parameters", data=transform.parameters) # type: ignore
+    h5_handle.create_dataset(f"{name}/fixed_parameters", data=transform.fixed_parameters) # type: ignore
 
 
-def read_affine(h5_handle, name, directory=None):
-    """Read ANTs affine transform from h5
+def read_affine(h5_handle: h5py.File, name: str, directory: str | None = None) -> ants.ANTsTransform | str:
+    """Read ANTs affine transform from h5.
+    
     If directory is not None, writes to a file and returns absolute path
     This allows use with ants.apply_transforms which demands files.
 
 
     Args:
-      h5_handle: open file handle - h5py.File
-      name: name of group, absolute path - str
-      directory: absolute path to (presumably temporary) directory to write result to
+        h5_handle: open file handle - h5py.File
+        name: name of group, absolute path - str
+        directory: absolute path to (presumably temporary) directory to write result to
 
     Returns:
-      transform: path or transform object
+        transform: path or transform object
     """
-    assert isinstance(h5_handle, h5py.File)
-
     transform = ants.create_ants_transform()
     transform.set_parameters(h5_handle[f"{name}/parameters"][:])
     transform.set_fixed_parameters(h5_handle[f"{name}/fixed_parameters"][:])
@@ -62,13 +60,13 @@ def read_affine(h5_handle, name, directory=None):
     return transform_path
 
 
-def write_image(h5_handle, name, image):
+def write_image(h5_handle: h5py.File, name: str, image: ants.ANTsImage | str) -> None:
     """Writes ANTs image to h5.
 
     Args:
-      h5_handle: open file handle - h5py.File
-      name: name of dataset to create, absolute path - str
-      image: if str interpreted as path to image file - ANTsImage or str
+        h5_handle: open file handle - h5py.File
+        name: name of dataset to create, absolute path - str
+        image: if str interpreted as path to image file - ANTsImage or str
     """
     assert isinstance(h5_handle, h5py.File)
     assert isinstance(image, ants.ANTsImage | str)
@@ -76,7 +74,7 @@ def write_image(h5_handle, name, image):
     if isinstance(image, str):
         image = ants.image_read(image)
 
-    image_arr = image.numpy()
+    image_arr = image.numpy() # type: ignore
 
     h5_handle.create_dataset(
         name,
@@ -88,25 +86,26 @@ def write_image(h5_handle, name, image):
         fletcher32=True,
     )
 
-    h5_handle[name].attrs["origin"] = image.origin
-    h5_handle[name].attrs["spacing"] = image.spacing
-    h5_handle[name].attrs["direction"] = image.direction
-    h5_handle[name].attrs["has_components"] = image.has_components
+    h5_handle[name].attrs["origin"] = image.origin # type: ignore
+    h5_handle[name].attrs["spacing"] = image.spacing # type: ignore
+    h5_handle[name].attrs["direction"] = image.direction # type: ignore
+    h5_handle[name].attrs["has_components"] = image.has_components # type: ignore
 
 
-def read_image(h5_handle, name, directory=None):
-    """Reads ANTs image from h5
+def read_image(h5_handle: h5py.File, name: str, directory: str | None = None) -> ants.ANTsImage | str:
+    """Reads ANTs image from h5.
+    
     If directory is not None, writes to a file and returns absolute path
     This allows use with ants.apply_transforms which demands files.
 
 
     Args:
-      h5_handle: open file handle - h5py.File
-      name: name of dataset, absolute path - str
-      directory: absolute path to (presumably temporary) directory to write result to
+        h5_handle: open file handle - h5py.File
+        name: name of dataset, absolute path - str
+        directory: absolute path to (presumably temporary) directory to write result to
 
     Returns:
-      image - ants.ANTs.Image
+        image - ants.ANTs.Image
     """
     assert isinstance(h5_handle, h5py.File)
 
@@ -130,27 +129,43 @@ def read_image(h5_handle, name, directory=None):
     return img_path
 
 
-def guarded_ants_image_read(image_path):
-    """ants.image_read that raises fatal exception for multi-channel images."""
+def guarded_ants_image_read(image_path: str) -> ants.ANTsImage:
+    """Reads an ANTs image using ants.image_read.
+
+    Raises an exception for multi-channel images.
+
+    Args:
+        image_path: path to the image file
+    
+    Rauses:
+        RuntimeError: if the image has multiple channels
+    
+    Returns:
+        image: ANTsImage object
+    
+    """
     image = ants.image_read(image_path)
 
     if image.components > 1:
         logger = logging.getLogger(__name__)
-        msg = f"{image_path} has multiple channels. Multi-channel images are not supported by bifrost, split into per-channel images"
+        msg = (
+            f"{image_path} has multiple channels. "
+            "Multi-channel images are not supported by bifrost, "
+            "split into per-channel images"
+        )
         logger.critical(msg)
         raise RuntimeError(msg)
-
     return image
 
 
-def md5sum(filename):
+def md5sum(filename: str) -> str:
     """Compute the md5sum of a file.
 
     Args:
-      filename - str
+        filename: path to file
 
     Returns:
-      file_hash - str
+        md5 hash of the file as a hex string
     """
     file_hash = hashlib.md5()
 
@@ -162,21 +177,3 @@ def md5sum(filename):
             chunk = file_handle.read(8192)
 
     return file_hash.hexdigest()
-
-
-def download_weights(shapes=True):
-    """Download synthmorph weights. By default the 'shapes' weights are downloaded."""
-    if shapes:
-        weights_url = (
-            "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/shapes-dice-vel-3-res-8-16-32-256f.h5"
-        )
-    else:
-        weights_url = (
-            "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/brains-dice-vel-0.5-res-16-256f.h5"
-        )
-
-    weight_dir = f"{package_path()}/weights"
-
-    os.makedirs(weight_dir, exist_ok=True)
-
-    urllib.request.urlretrieve(weights_url, f"{weight_dir}/synthmorph_weights.h5")

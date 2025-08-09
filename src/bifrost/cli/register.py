@@ -28,11 +28,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 TARGET_SHAPE = (160, 160, 192)
 DEVICE = "/CPU:0"
 
-# Default BIFROST weights path
-DEFAULT_BIFROST_WEIGHTS_PATH = get_default_bifrost_weights_path("shapes.h5")
-BIFROST_WEIGHTS_PATH = Path(os.environ.get("BIFROST_WEIGHTS_PATH", DEFAULT_BIFROST_WEIGHTS_PATH)).resolve()
-
-
 def register(args):
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
@@ -78,7 +73,9 @@ def register(args):
             return
     else:
         os.makedirs(results_dir)
-
+        
+        
+    BIFROST_WEIGHTS_PATH = get_default_bifrost_weights_path()
     if args.weights is not None:
         BIFROST_WEIGHTS_PATH = Path(args.weights).resolve()
         logger.info("Using custom weights from %s", BIFROST_WEIGHTS_PATH)
@@ -294,7 +291,7 @@ def register(args):
         #                              FIND MIRROR AXIS                              #
         # ========================================================================== #
 
-        mirror_axis = None
+        mirror_axis = np.nan
 
         if args.mirror_warp:
             axis_rms = []

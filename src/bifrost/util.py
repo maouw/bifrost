@@ -2,30 +2,26 @@
 
 import argparse
 import hashlib
-import inspect
-import os
+from collections.abc import Sequence
 
+import ants
 import numpy as np
+import numpy.typing as npt
 import platformdirs
-
-import bifrost
 
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
 
-def update_image_array(image, updated):
-    """Update ANTs.Image image array but preserve metadata.
+def update_image_array(image: ants.ANTsImage, updated: npt.NDArray) -> ants.ANTsImage:
+    """Update ANTsImage image array but preserve metadata.
 
     Args:
-      image - ants.ANTsImage
-      updated: array to replace image data with - np.ndarray
+        image: the image to update
+        updated: array to replace image data with
 
     Returns:
-      updated_image - ants.ANTsImage
+        updated_image: the updated ANTsImage
     """
-    import ants
-
-    assert isinstance(image, ants.ANTsImage)
     assert image.numpy().shape == updated.shape
 
     updated_image = ants.from_numpy(
@@ -39,20 +35,16 @@ def update_image_array(image, updated):
     return updated_image
 
 
-def threshold_image(image, threshold):
+def threshold_image(image: ants.ANTsImage, threshold: float) -> ants.ANTsImage:
     """Set intensity values below threshold to 0.
 
     Args:
-      image - ants.ANTsImage
-      threshold - float
+        image: ants.ANTsImage
+        threshold: float
 
     Returns:
-      thresholded_img - ants.ANTsImage
+        thresholded_img: ants.ANTsImage
     """
-    import ants
-
-    assert isinstance(image, ants.ANTsImage)
-
     image_arr = image.numpy()
 
     image_arr[image_arr <= threshold] = 0
@@ -68,22 +60,22 @@ def threshold_image(image, threshold):
     return thresholded_image
 
 
-def transpose_image(image, transposition):
+def transpose_image(image: ants.ANTsImage, transposition: npt.NDArray) -> ants.ANTsImage:
     """Transpose the axes of an image, preserve metadata.
 
     Args:
-      image - ants.ANTsImage
-      transposition: permutation of axes, same format as np.transpose
+    image: image to transpose
+    transposition: permutation of axes, same format as np.transpose
 
     Returns:
-      transposed_image
+        transposed_image: the transposed image
     """
-    import ants
-
-    assert sorted(transposition) == list(range(len(transposition)))
+    # assert sorted(transposition) == list(range(len(transposition)))
+    np.testing.assert_array_equal(np.sort(transposition), np.arange(len(transposition)))
 
     def _permute(arr):
         return [arr[idx] for idx in transposition]
+        return np.array(arr)[transposition]
 
     image_arr = image.numpy()
 
@@ -100,30 +92,30 @@ def transpose_image(image, transposition):
     return transposed_image
 
 
-def dice_coefficient(image_1, image_2, exclude_labels=[0]):
-    """Computes the mean Sørensen–Dice coefficient across labels for two images
+def dice_coefficient(image_1: npt.NDArray, image_2: npt.NDArray, exclude_labels: set[int] | Sequence[int] = (0,)):
+    """Computes the mean Sørensen–Dice coefficient across labels for two images.
+
     Also returns per label dice coefficients.
 
     Args:
-      image_1 - np.ndarray
-      image_2 - np.ndarray
-      exclude_labels: (optional) list of labels to exclude, say the background - list
+        image_1: an image array
+        image_2: an image array
+        exclude_labels: (optional) list of labels to exclude, say the background - list
 
     Returns:
-      mean_coeff - float
-      label_coeffs: map of label to dice coeff - dict
+        mean_coeff: float
+        label_coeffs: map of label to dice coeff - dict
     """
     assert image_1.shape == image_2.shape
-    assert isinstance(image_1, np.ndarray)
-    assert isinstance(image_2, np.ndarray)
 
     labels = np.unique(image_1)
-    assert all(labels == np.unique(image_2))
+    np.testing.assert_allclose(labels, np.unique(image_2))  # assert all(labels == np.unique(image_2))
 
     label_coeffs = {}
 
+    exclude_labels = set(exclude_labels)
     for label in labels:
-        assert float(label).is_integer()
+        #        assert float(label).is_integer()
 
         if label not in exclude_labels:
             mask_1 = image_1 == label
@@ -134,11 +126,6 @@ def dice_coefficient(image_1, image_2, exclude_labels=[0]):
     mean_coeff = np.mean(list(label_coeffs.values()))
 
     return mean_coeff, label_coeffs
-
-
-def package_path():
-    """Returns the absolute path to this package base directory."""
-    return os.path.dirname(inspect.getfile(bifrost))
 
 
 def sha256(byte_string):

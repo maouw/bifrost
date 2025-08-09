@@ -17,30 +17,31 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "Programming Language :: Python :: 3.10",
 ]
-requires-python = "== 3.10.*"
+requires-python = ">= 3.10"
 dependencies = [
-  "antspyx~=0.4.2",
+  "antspyx>=0.4.2",
   "configargparse~=1.7.0",
-  "numpy>=1.26.4,<2",
+  "numpy>=1.2.0,<2.0",
   "platformdirs~=4.3.6",
   "pulp==2.7.0",
-  "requests~=2.32.4",
-  "scikit-image~=0.24.0",
-  "scikit-learn~=1.4.2",
-  "scipy~=1.10.1",
+  "requests>=2.32.4",
+  "scikit-image>=0.24.0",
+  "scikit-learn>=1.4.2",
+  "scipy>=1.10.1",
   "snakemake~=7.32.4",
-  "tensorflow~=2.15.1",
-  "tf-keras~=2.15.1",
-  "voxelmorph@git+https://github.com/voxelmorph/voxelmorph.git@2462d54511b45cf4bc00aa7df992ca6301ccec39",
-#  "voxelmorph@git+https://github.com/ClandininLab/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
+  "tensorflow>=2.15.1",
+  "tf-keras>=2.15.1",
+  "voxelmorph>=0.2",
+  "neurite>=0.2",
+  #  "voxelmorph@git+https://github.com/ClandininLab/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
   # ALTERNATIVE URL: "voxelmorph@git+https://github.com/maouw/voxelmorph.git@ed92ff23455c8b8942a0c38ee8988223b71410c",
   #"neurite@git+https://github.com/ClandininLab/neurite.git@40f054e3dd45a5bcc47999b549e2e60e05eaf4ce",
   # ALTERNATIVE URL: "neurite@git+https://github.com/ClandininLab/neurite.git@40f054e3dd45a5bcc47999b549e2e60e05eaf4ce"
-
+  "tqdm>=4.67.1",
 ]
 
-[project.optional-dependencies]
-dev = ["ipython", "mypy", "ruff"]
+#[project.optional-dependencies]
+#dev = ["ipython", "mypy", "ruff", "pyright"]
 
 [project.urls]
 Homepage = "https://github.com/ClandininLab/bifrost"
@@ -56,7 +57,14 @@ bifrost = "bifrost.cli.bifrost:main"
 
 [tool.mypy]
 ignore_missing_imports = true
-strict = true
+#strict = true
+plugins = [
+  "numpy.typing.mypy_plugin"
+]
+mypy_path = [
+  "src",
+  ".stubs"
+]
 
 # Ruff configuration: https://docs.astral.sh/ruff/configuration/#configuring-ruff
 [tool.ruff]
@@ -99,7 +107,10 @@ select = [
   'E',  # pycodestyle (Error)
   'I',  # isort
   'D',  # pydocstyle
-  'UP', # pyupgrade
+  'UP', # pyupgrade,
+  "B",   # flake8-bugbear,
+  "Q", # flake8-quotes,
+  "PL" # pylint
 ]
 pydocstyle = { convention = "google" }
 
@@ -107,18 +118,46 @@ pydocstyle = { convention = "google" }
 'docs/*' = ["D"]
 'tests/*' = ["D"]
 
+[tool.ruff.lint.pylint]
+allow-magic-value-types = ["int", "str"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
+# fixable = ["ALL"]
+# unfixable = []
 
 
 [tool.ruff.format]
 # Set line ending to "lf" (Unix)
 line-ending = "lf"
-
+# Set the indentation style to "space"
+indent-style = "space"
 # Enable auto-formatting of code examples in docstrings. Markdown, reStructuredText code/literal blocks and doctests are all supported.
 docstring-code-format = true
 
 # Set the line length limit used when formatting code snippets in docstrings.
-docstring-code-line-length = "dynamic"
+docstring-code-line-length = 180
+
+[tool.uv.sources]
+neurite = { git = "https://github.com/adalca/neurite.git", rev = "9ae2f5cec2201eedbcc6929cecf852193cef7646" }
+voxelmorph = { git = "https://github.com/voxelmorph/voxelmorph.git", rev = "5ffe46a3b5764402c9658d92b9ef97a782a5e73f" }
+#neurite = { git = "https://github.com/adalca/neurite.git", rev = "6c2459e1027df596b05fa470aef4a079ab8bbad9" }
+
+[dependency-groups]
+dev = [
+    "ipython>=8.37.0",
+    "mypy>=1.17.1",
+    "pyright>=1.1.403",
+    "ruff>=0.12.8",
+    "scipy-stubs>=1.15.3.0",
+    "types-tensorflow>=2.18.0.20250809",
+]
+
+[tool.pyright]
+include = ["src"]
+#exclude = ["examples"]
+defineConstant = { DEBUG = true }
+stubPath = "./.stubs"
+reportMissingImports = true
+reportMissingTypeStubs = true
+pythonVersion = "3.10"
+pythonPlatform = "Linux"
