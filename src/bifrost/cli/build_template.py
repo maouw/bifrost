@@ -1,4 +1,4 @@
-"""Logic for template building
+"""Logic for template building.
 
 Execute using the 'bifrost' executable installed by setuptools
 """
@@ -214,7 +214,7 @@ def build_template(args):
 
 
 def preprocess(args, input_path, output_path):
-    """Runs all preprocessing"""
+    """Runs all preprocessing."""
     image = guarded_ants_image_read(input_path)
 
     if args.preprocessing is None:
@@ -234,7 +234,7 @@ def preprocess(args, input_path, output_path):
 
 
 def __legacy_preprocess(image):
-    """Legacy preprocessing"""
+    """Legacy preprocessing."""
     image_arr = image.numpy()
 
     # Blur brain and mask small values
@@ -257,7 +257,7 @@ def __legacy_preprocess(image):
 
 
 def generate_template(args, step_name, output_path, transform_avg):
-    """Generates template from registration results
+    """Generates template from registration results.
 
     Depending on the experiment type this either averages the images directly or 'averages' their transformations
     """

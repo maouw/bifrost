@@ -1,4 +1,4 @@
-"""Dispatch logic for all BIFROST tools
+"""Dispatch logic for all BIFROST tools.
 
 Execute using the 'bifrost' executable installed by setuptools
 """

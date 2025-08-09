@@ -1,5 +1,4 @@
-"""Module for I/O related methods
-"""
+"""Module for I/O related methods."""
 
 import hashlib
 import logging
@@ -13,7 +12,7 @@ from bifrost.util import package_path
 
 
 def write_affine(h5_handle, name, transform):
-    """Write ANTs affine transform to h5
+    """Write ANTs affine transform to h5.
 
     Args:
       h5_handle: open file handle - h5py.File
@@ -21,7 +20,7 @@ def write_affine(h5_handle, name, transform):
       transform: if str interpreted as path to .mat file - ANTsTransform or str
     """
     assert isinstance(h5_handle, h5py.File)
-    assert isinstance(transform, (ants.ANTsTransform, str))
+    assert isinstance(transform, ants.ANTsTransform | str)
 
     if isinstance(transform, str):
         transform = ants.read_transform(transform)
@@ -34,7 +33,7 @@ def write_affine(h5_handle, name, transform):
 def read_affine(h5_handle, name, directory=None):
     """Read ANTs affine transform from h5
     If directory is not None, writes to a file and returns absolute path
-    This allows use with ants.apply_transforms which demands files
+    This allows use with ants.apply_transforms which demands files.
 
 
     Args:
@@ -64,7 +63,7 @@ def read_affine(h5_handle, name, directory=None):
 
 
 def write_image(h5_handle, name, image):
-    """Writes ANTs image to h5
+    """Writes ANTs image to h5.
 
     Args:
       h5_handle: open file handle - h5py.File
@@ -72,7 +71,7 @@ def write_image(h5_handle, name, image):
       image: if str interpreted as path to image file - ANTsImage or str
     """
     assert isinstance(h5_handle, h5py.File)
-    assert isinstance(image, (ants.ANTsImage, str))
+    assert isinstance(image, ants.ANTsImage | str)
 
     if isinstance(image, str):
         image = ants.image_read(image)
@@ -98,7 +97,7 @@ def write_image(h5_handle, name, image):
 def read_image(h5_handle, name, directory=None):
     """Reads ANTs image from h5
     If directory is not None, writes to a file and returns absolute path
-    This allows use with ants.apply_transforms which demands files
+    This allows use with ants.apply_transforms which demands files.
 
 
     Args:
@@ -132,7 +131,7 @@ def read_image(h5_handle, name, directory=None):
 
 
 def guarded_ants_image_read(image_path):
-    """ants.image_read that raises fatal exception for multi-channel images"""
+    """ants.image_read that raises fatal exception for multi-channel images."""
     image = ants.image_read(image_path)
 
     if image.components > 1:
@@ -145,7 +144,7 @@ def guarded_ants_image_read(image_path):
 
 
 def md5sum(filename):
-    """Compute the md5sum of a file
+    """Compute the md5sum of a file.
 
     Args:
       filename - str
@@ -166,7 +165,7 @@ def md5sum(filename):
 
 
 def download_weights(shapes=True):
-    """Download synthmorph weights. By default the 'shapes' weights are downloaded"""
+    """Download synthmorph weights. By default the 'shapes' weights are downloaded."""
     if shapes:
         weights_url = (
             "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/shapes-dice-vel-3-res-8-16-32-256f.h5"

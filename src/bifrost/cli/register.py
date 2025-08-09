@@ -1,4 +1,4 @@
-"""Logic for full registration pipeline
+"""Logic for full registration pipeline.
 
 Execute using the 'bifrost' executable installed by setuptools
 """

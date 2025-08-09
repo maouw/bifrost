@@ -1,4 +1,4 @@
-"""Misc. utility methods"""
+"""Misc. utility methods."""
 
 import argparse
 import hashlib
@@ -14,7 +14,7 @@ SYNTHMORPH_SHAPE = (160, 160, 192)
 
 
 def update_image_array(image, updated):
-    """Update ANTs.Image image array but preserve metadata
+    """Update ANTs.Image image array but preserve metadata.
 
     Args:
       image - ants.ANTsImage
@@ -40,7 +40,7 @@ def update_image_array(image, updated):
 
 
 def threshold_image(image, threshold):
-    """Set intensity values below threshold to 0
+    """Set intensity values below threshold to 0.
 
     Args:
       image - ants.ANTsImage
@@ -69,7 +69,7 @@ def threshold_image(image, threshold):
 
 
 def transpose_image(image, transposition):
-    """Transpose the axes of an image, preserve metadata
+    """Transpose the axes of an image, preserve metadata.
 
     Args:
       image - ants.ANTsImage
@@ -102,7 +102,7 @@ def transpose_image(image, transposition):
 
 def dice_coefficient(image_1, image_2, exclude_labels=[0]):
     """Computes the mean Sørensen–Dice coefficient across labels for two images
-    Also returns per label dice coefficients
+    Also returns per label dice coefficients.
 
     Args:
       image_1 - np.ndarray
@@ -137,19 +137,19 @@ def dice_coefficient(image_1, image_2, exclude_labels=[0]):
 
 
 def package_path():
-    """Returns the absolute path to this package base directory"""
+    """Returns the absolute path to this package base directory."""
     return os.path.dirname(inspect.getfile(bifrost))
 
 
 def sha256(byte_string):
-    """Returns the hex sha256 digest of a byte encoded string"""
+    """Returns the hex sha256 digest of a byte encoded string."""
     digester = hashlib.sha256()
     digester.update(byte_string)
     return digester.hexdigest()
 
 
 class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
-    """Adapted from https://stackoverflow.com/questions/13423540/argparse-subparser-hide-metavar-in-command-listing"""
+    """Adapted from https://stackoverflow.com/questions/13423540/argparse-subparser-hide-metavar-in-command-listing."""
 
     def _format_action(self, action):
         parts = super(argparse.RawDescriptionHelpFormatter, self)._format_action(action)
@@ -159,7 +159,7 @@ class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
 
 
 def get_default_bifrost_weights_path(filename="shapes.h5"):
-    """Returns the default path to the Bifrost weights file"""
+    """Returns the default path to the Bifrost weights file."""
     # Use platformdirs to get the site data path for Bifrost
     bifrost_data_dir = platformdirs.site_data_path("bifrost")
     return bifrost_data_dir / "weights" / filename
