@@ -30,9 +30,7 @@ def write_affine(h5_handle, name, transform):
 
     h5_handle.create_group(name)
     h5_handle.create_dataset(f"{name}/parameters", data=transform.parameters)
-    h5_handle.create_dataset(
-        f"{name}/fixed_parameters", data=transform.fixed_parameters
-    )
+    h5_handle.create_dataset(f"{name}/fixed_parameters", data=transform.fixed_parameters)
 
 
 def read_affine(h5_handle, name, directory=None):
@@ -172,9 +170,13 @@ def md5sum(filename):
 def download_weights(shapes=True):
     """Download synthmorph weights. By default the 'shapes' weights are downloaded"""
     if shapes:
-        weights_url = "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/shapes-dice-vel-3-res-8-16-32-256f.h5"
+        weights_url = (
+            "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/shapes-dice-vel-3-res-8-16-32-256f.h5"
+        )
     else:
-        weights_url = "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/brains-dice-vel-0.5-res-16-256f.h5"
+        weights_url = (
+            "https://surfer.nmr.mgh.harvard.edu/ftp/data/voxelmorph/synthmorph/brains-dice-vel-0.5-res-16-256f.h5"
+        )
 
     weight_dir = f"{package_path()}/weights"
 

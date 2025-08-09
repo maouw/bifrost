@@ -1,4 +1,4 @@
-""" Logic for template building
+"""Logic for template building
 
 Execute using the 'bifrost' executable installed by setuptools
 """
@@ -21,7 +21,6 @@ from bifrost.util import sha256, update_image_array
 
 
 def build_template(args):
-
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -48,7 +47,6 @@ def build_template(args):
         stdout_handler.setLevel(logging.CRITICAL + 1)
 
     try:
-
         # ========================================================================== #
         #                              PATH LOGIC                                    #
         # ========================================================================== #
@@ -59,12 +57,7 @@ def build_template(args):
             assert os.path.exists(input_path)
 
             if os.path.isdir(input_path):
-                input_paths.extend(
-                    [
-                        f"{input_path}/{input_file}"
-                        for input_file in os.listdir(input_path)
-                    ]
-                )
+                input_paths.extend([f"{input_path}/{input_file}" for input_file in os.listdir(input_path)])
             else:
                 input_paths.append(input_path)
 
@@ -104,9 +97,7 @@ def build_template(args):
         file_handler = logging.FileHandler(log_path)
         file_handler.setLevel(logging.DEBUG)
 
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(formatter)
 
         logger.addHandler(file_handler)
@@ -237,9 +228,7 @@ def preprocess(args, input_path, output_path):
         image -= image.min()
         image /= image.max()
 
-        image = update_image_array(
-            image, equalize_adapthist(image.numpy(), kernel_size=64, clip_limit=0.03)
-        )
+        image = update_image_array(image, equalize_adapthist(image.numpy(), kernel_size=64, clip_limit=0.03))
 
     ants.image_write(image, output_path)
 
@@ -262,9 +251,7 @@ def __legacy_preprocess(image):
     image_copy[np.where(labels != image_label)] = np.nan
 
     # Perform quantile normalization
-    image_copy = quantile_transform(
-        image_copy.flatten().reshape(-1, 1), n_quantiles=500, random_state=0
-    )
+    image_copy = quantile_transform(image_copy.flatten().reshape(-1, 1), n_quantiles=500, random_state=0)
     image_copy = image_copy.reshape(image_arr.shape)
 
     return update_image_array(image, np.nan_to_num(image_copy))
@@ -308,13 +295,9 @@ def generate_template(args, step_name, output_path, transform_avg):
                     # this could only ever be construed as an inverse if you squint, a lot
                     inv_avg_transform = avg_transform * -1 * args.gradient_step
 
-                    ants.image_write(
-                        inv_avg_transform, f"{transform_dir}/transform.nii"
-                    )
+                    ants.image_write(inv_avg_transform, f"{transform_dir}/transform.nii")
 
-                template = ants.apply_transforms(
-                    avg_img, avg_img, f"{transform_dir}/transform.nii"
-                )
+                template = ants.apply_transforms(avg_img, avg_img, f"{transform_dir}/transform.nii")
 
                 ants.image_write(template, output_path)
 
@@ -364,17 +347,13 @@ def alignment_iteration(
                 input_name = input_path.split("/")[-1].split(".")[0]
 
                 if __step_output_exists(input_name, step_dir, transform_avg, False):
-                    logger.info(
-                        "%s: found cached result for %s ", step_name, input_name
-                    )
+                    logger.info("%s: found cached result for %s ", step_name, input_name)
                 else:
                     logger.info("%s: processing %s", step_name, input_name)
 
                     moving = ants.image_read(input_path)
 
-                    registration = ants.registration(
-                        fixed, moving, type_of_transform=type_of_transform
-                    )
+                    registration = ants.registration(fixed, moving, type_of_transform=type_of_transform)
 
                     __write_step_output(
                         registration,
@@ -392,9 +371,7 @@ def alignment_iteration(
                             input_name,
                         )
                     else:
-                        logger.info(
-                            "%s: processing input %s mirror", step_name, input_name
-                        )
+                        logger.info("%s: processing input %s mirror", step_name, input_name)
 
                         moving_mirror = update_image_array(moving, moving[::-1])
 
@@ -412,9 +389,7 @@ def alignment_iteration(
                 break
             except Exception as exc:
                 if __retries < 2:
-                    logger.exception(
-                        "Caught exception processing input %s, retrying", input_name
-                    )
+                    logger.exception("Caught exception processing input %s, retrying", input_name)
 
                     __clean_step_output(input_name, step_dir, mirror)
                     __retries += 1
@@ -473,9 +448,7 @@ def __step_output_exists(input_name, step_dir, write_transform, mirror):
     if not os.path.exists(f"{step_dir}/{input_name}{suffix}.nii"):
         return False
 
-    if write_transform and not os.path.exists(
-        f"{step_dir}/{input_name}{suffix}_t.nii.gz"
-    ):
+    if write_transform and not os.path.exists(f"{step_dir}/{input_name}{suffix}_t.nii.gz"):
         return False
 
     return True

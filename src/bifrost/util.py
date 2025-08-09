@@ -1,5 +1,4 @@
-""" Misc. utility methods
-"""
+"""Misc. utility methods"""
 
 import argparse
 import hashlib
@@ -131,9 +130,7 @@ def dice_coefficient(image_1, image_2, exclude_labels=[0]):
             mask_1 = image_1 == label
             mask_2 = image_2 == label
 
-            label_coeffs[int(label)] = (
-                2 * np.sum(mask_1 * mask_2) / (np.sum(mask_1) + np.sum(mask_2))
-            )
+            label_coeffs[int(label)] = 2 * np.sum(mask_1 * mask_2) / (np.sum(mask_1) + np.sum(mask_2))
 
     mean_coeff = np.mean(list(label_coeffs.values()))
 
@@ -168,4 +165,3 @@ def get_default_bifrost_weights_path(filename="shapes.h5"):
     # Use platformdirs to get the site data path for Bifrost
     bifrost_data_dir = platformdirs.site_data_path("bifrost")
     return bifrost_data_dir / "weights" / filename
-

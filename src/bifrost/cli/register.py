@@ -1,4 +1,4 @@
-""" Logic for full registration pipeline
+"""Logic for full registration pipeline
 
 Execute using the 'bifrost' executable installed by setuptools
 """
@@ -16,8 +16,7 @@ import tensorflow as tf
 import voxelmorph as vxm
 from skimage.exposure import equalize_adapthist
 
-from bifrost.io import (download_weights, guarded_ants_image_read, md5sum,
-                        write_affine, write_image)
+from bifrost.io import download_weights, guarded_ants_image_read, md5sum, write_affine, write_image
 from bifrost.util import package_path, transpose_image, update_image_array, get_default_bifrost_weights_path
 
 # hide GPUs
@@ -35,7 +34,6 @@ BIFROST_WEIGHTS_PATH = Path(os.environ.get("BIFROST_WEIGHTS_PATH", DEFAULT_BIFRO
 
 
 def register(args):
-
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -76,9 +74,7 @@ def register(args):
             shutil.rmtree(results_dir)
             os.makedirs(results_dir)
         else:
-            logger.warning(
-                "Results directory already exists. Run again with -f or --force to override"
-            )
+            logger.warning("Results directory already exists. Run again with -f or --force to override")
             return
     else:
         os.makedirs(results_dir)
@@ -97,9 +93,7 @@ def register(args):
     # ========================================================================== #
 
     if args.skip_syn and args.skip_affine and args.skip_synthmorph:
-        logger.warning(
-            "All registration steps skipped. Run again with a registration step enabled"
-        )
+        logger.warning("All registration steps skipped. Run again with a registration step enabled")
         return
 
     # ========================================================================== #
@@ -117,9 +111,7 @@ def register(args):
     file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(logging.INFO)
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(formatter)
 
     logger.addHandler(file_handler)
@@ -185,21 +177,15 @@ def register(args):
                     synthmorph_mask.spacing,
                     desired_spacing,
                 )
-                synthmorph_mask = ants.resample_image(
-                    synthmorph_mask, desired_spacing, interp_type=3
-                )
+                synthmorph_mask = ants.resample_image(synthmorph_mask, desired_spacing, interp_type=3)
 
             if not (
                 synthmorph_mask.shape == moving_img.shape
                 and synthmorph_mask.spacing == moving_img.spacing
                 and (synthmorph_mask.direction == moving_img.direction).all()
             ):
-                logger.critical(
-                    "Fatal discrepancy between SynthMorph mask metadata and moving image metadata."
-                )
-                raise RuntimeError(
-                    "Fatal discrepancy between SynthMorph mask metadata and moving image metadata."
-                )
+                logger.critical("Fatal discrepancy between SynthMorph mask metadata and moving image metadata.")
+                raise RuntimeError("Fatal discrepancy between SynthMorph mask metadata and moving image metadata.")
 
             write_image(h5_handle, "/synthmorph_mask", synthmorph_mask)
 
@@ -212,9 +198,7 @@ def register(args):
                     moving_img.spacing,
                     desired_spacing,
                 )
-                moving_img = ants.resample_image(
-                    moving_img, desired_spacing, interp_type=3
-                )
+                moving_img = ants.resample_image(moving_img, desired_spacing, interp_type=3)
 
             if fixed_img.spacing != desired_spacing:
                 logger.info(
@@ -222,18 +206,14 @@ def register(args):
                     fixed_img.spacing,
                     desired_spacing,
                 )
-                fixed_img = ants.resample_image(
-                    fixed_img, desired_spacing, interp_type=3
-                )
+                fixed_img = ants.resample_image(fixed_img, desired_spacing, interp_type=3)
 
         # ========================================================================== #
         #                                  RESCALE                                   #
         # ========================================================================== #
 
         logger.info("Rescaling images")
-        logger.info(
-            "Moving intensity range: %s - %s", moving_img.min(), moving_img.max()
-        )
+        logger.info("Moving intensity range: %s - %s", moving_img.min(), moving_img.max())
         moving_img -= moving_img.min()
         moving_img /= moving_img.max()
 
@@ -276,11 +256,8 @@ def register(args):
         if args.skip_affine:
             full_res_moving = moving_img
         else:
-
             logger.info("Running affine alignment")
-            affine = ants.registration(
-                fixed_img, moving_img, type_of_transform="Affine"
-            )
+            affine = ants.registration(fixed_img, moving_img, type_of_transform="Affine")
 
             moving_img = affine["warpedmovout"]
             full_res_moving = moving_img
@@ -298,14 +275,10 @@ def register(args):
 
             # write intermediate result
             ants.image_write(moving_img, f"{results_dir}/registered.nii")
-            logger.debug(
-                "Wrote affine warpedmovout to %s", f"{results_dir}/registered.nii"
-            )
+            logger.debug("Wrote affine warpedmovout to %s", f"{results_dir}/registered.nii")
 
             if args.keep_intermediates:
-                shutil.copy(
-                    f"{results_dir}/registered.nii", f"{results_dir}/affine.nii"
-                )
+                shutil.copy(f"{results_dir}/registered.nii", f"{results_dir}/affine.nii")
 
         # ========================================================================== #
         #                           CALCULATE TRANSPOSITION                          #
@@ -352,9 +325,7 @@ def register(args):
 
             if args.synthmorph_mask is not None:
                 logger.info("Applying SyN transform to SynthMorph mask")
-                synthmorph_mask = ants.apply_transforms(
-                    fixed_img, synthmorph_mask, transformlist=syn["fwdtransforms"]
-                )
+                synthmorph_mask = ants.apply_transforms(fixed_img, synthmorph_mask, transformlist=syn["fwdtransforms"])
 
             h5_handle.create_group("/syn")
 
@@ -366,9 +337,7 @@ def register(args):
             # write intermediate result, cleaning existing if it exists
             Path(f"{results_dir}/registered.nii").unlink(missing_ok=True)
             ants.image_write(moving_img, f"{results_dir}/registered.nii")
-            logger.debug(
-                "Wrote SyN warpedmovout to %s", f"{results_dir}/registered.nii"
-            )
+            logger.debug("Wrote SyN warpedmovout to %s", f"{results_dir}/registered.nii")
 
             if args.keep_intermediates:
                 shutil.copy(f"{results_dir}/registered.nii", f"{results_dir}/syn.nii")
@@ -378,32 +347,21 @@ def register(args):
         # ========================================================================== #
 
         if not args.skip_synthmorph:
-
             # ========================================================================== #
             #                                DOWNSAMPLE                                  #
             # ========================================================================== #
 
-            logger.info(
-                "Transposing moving from %s to %s", moving_img.shape, transposed_shape
-            )
+            logger.info("Transposing moving from %s to %s", moving_img.shape, transposed_shape)
             moving_img = transpose_image(moving_img, optimal_transposition)
 
-            logger.info(
-                "Transposing fixed from %s to %s", fixed_img.shape, transposed_shape
-            )
+            logger.info("Transposing fixed from %s to %s", fixed_img.shape, transposed_shape)
             fixed_img = transpose_image(fixed_img, optimal_transposition)
 
-            logger.info(
-                "Resampling moving from %s to %s", moving_img.shape, TARGET_SHAPE
-            )
-            moving_img = ants.resample_image(
-                moving_img, TARGET_SHAPE, use_voxels=True, interp_type=3
-            )
+            logger.info("Resampling moving from %s to %s", moving_img.shape, TARGET_SHAPE)
+            moving_img = ants.resample_image(moving_img, TARGET_SHAPE, use_voxels=True, interp_type=3)
 
             logger.info("Resampling fixed from %s to %s", fixed_img.shape, TARGET_SHAPE)
-            fixed_img = ants.resample_image(
-                fixed_img, TARGET_SHAPE, use_voxels=True, interp_type=3
-            )
+            fixed_img = ants.resample_image(fixed_img, TARGET_SHAPE, use_voxels=True, interp_type=3)
 
             # ========================================================================== #
             #                                INFERENCE                                   #
@@ -433,14 +391,12 @@ def register(args):
                 if args.mirror_warp:
                     flipped_warp = np.flip(warp, mirror_axis + 1)
                     mirrored_warp = np.mean([warp, flipped_warp], axis=0)
-                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean(
-                        [warp, -flipped_warp], axis=0
-                    )[:, :, :, :, mirror_axis]
+                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean([warp, -flipped_warp], axis=0)[
+                        :, :, :, :, mirror_axis
+                    ]
                     warp = mirrored_warp
 
-                moved = vxm.networks.Transform(inshape, nb_feats=nb_feats).predict(
-                    [moving, warp]
-                )
+                moved = vxm.networks.Transform(inshape, nb_feats=nb_feats).predict([moving, warp])
 
                 moving = moved
 
@@ -485,17 +441,13 @@ def register(args):
                 transform = vxm.networks.Transform(full_res_moving.shape, nb_feats=1)
                 warped = transform.predict(
                     [
-                        full_res_moving.numpy().reshape(
-                            (1,) + full_res_moving.shape + (1,)
-                        ),
+                        full_res_moving.numpy().reshape((1,) + full_res_moving.shape + (1,)),
                         upsampled_warp.reshape((1,) + upsampled_warp.shape),
                     ]
                 ).squeeze()
 
             if args.synthmorph_mask is not None:
-                synthmorph_mask = (
-                    transpose_image(synthmorph_mask, optimal_transposition).numpy() > 0
-                )
+                synthmorph_mask = transpose_image(synthmorph_mask, optimal_transposition).numpy() > 0
                 warped[synthmorph_mask] = full_res_moving[synthmorph_mask]
 
             warped = transpose_image(ants.from_numpy(warped), inverse_transposition)
