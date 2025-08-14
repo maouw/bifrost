@@ -11,17 +11,16 @@ import tempfile
 import ants
 import h5py
 import numpy as np
-import tensorflow as tf
-import voxelmorph as vxm
 from skimage.exposure import equalize_adapthist
 
 from bifrost.io import guarded_ants_image_read, md5sum, read_affine, read_image
 from bifrost.util import transpose_image, update_image_array
 
 # hide GPUs
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 # suppress tensorflow import warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0 = all, 1 = info, 2 = warning, 3 = error
 
 
 def transform(args):
@@ -48,6 +47,16 @@ def transform(args):
         stdout_handler.setLevel(logging.INFO)
     else:
         stdout_handler.setLevel(logging.CRITICAL + 1)
+
+    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
+        try:
+            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
+            logger.setLevel(log_level)
+            stdout_handler.setLevel(log_level)
+            error_handler.setLevel(log_level)
+        except AttributeError:
+            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
+            sys.exit(1)
 
     # ========================================================================== #
     #                      CONFIGURE LOG FILE HANDLER                            #
@@ -76,6 +85,9 @@ def transform(args):
     logger.debug("Parsed args: %s", args)
 
     assert "transform.h5" in os.listdir(args.alignment_path)
+
+    import tensorflow as tf  # noqa: PLC0415 I001
+    import voxelmorph as vxm  # noqa: PLC0415 I001
 
     logger.info("Loading moving image: %s", args.image_path)
     moving_img = guarded_ants_image_read(args.image_path)
@@ -219,7 +231,7 @@ def transform(args):
 
             logger.info("Applying synthmorph transform")
 
-            with tf.device("/CPU:0"):
+            with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 # transform label image with nearest-neighbor interpolation
                 logger.info("Using nearest-neighbor interpolation")
                 if args.label_image:

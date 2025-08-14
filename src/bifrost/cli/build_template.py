@@ -12,7 +12,6 @@ from glob import glob
 
 import ants
 import numpy as np
-import numpy.typing as npt
 import scipy
 import scipy.ndimage
 from skimage.exposure import equalize_adapthist
@@ -49,6 +48,15 @@ def build_template(args: argparse.Namespace) -> None:
     else:
         stdout_handler.setLevel(logging.CRITICAL + 1)
 
+    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
+        try:
+            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
+            logger.setLevel(log_level)
+            stdout_handler.setLevel(log_level)
+            error_handler.setLevel(log_level)
+        except AttributeError:
+            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
+            sys.exit(1)
     try:
         # ========================================================================== #
         #                              PATH LOGIC                                    #

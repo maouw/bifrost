@@ -12,7 +12,7 @@ import numpy.typing as npt
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
 
-def update_image_array(image: ants.ANTsImage, updated: npt.NDArray) -> ants.ANTsImage:
+def update_image_array(image: ants.ANTsImage, updated: np.ndarray) -> ants.ANTsImage:
     """Update ANTsImage image array but preserve metadata.
 
     Args:
@@ -22,7 +22,8 @@ def update_image_array(image: ants.ANTsImage, updated: npt.NDArray) -> ants.ANTs
     Returns:
         updated_image: the updated ANTsImage
     """
-    assert image.shape == updated.shape, f"Shape mismatch: {image.shape} != {updated.shape}. Ensure the updated array has the same shape as the original image."
+    assert image.numpy().shape == updated.shape
+    # assert image.shape == updated.shape, f"Shape mismatch: {image.shape} != {updated.shape}. Ensure the updated array has the same shape as the original image."
 
     updated_image = ants.from_numpy(
         updated,
@@ -141,6 +142,7 @@ class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
         if action.nargs == argparse.PARSER:
             parts = "\n".join(parts.split("\n")[1:])
         return parts
+
 
 def default_arg_from_env_var(env_var, value_name="default"):
     """Returns a default argument from an environment variable for use in argparse.

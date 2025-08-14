@@ -12,8 +12,8 @@ from pathlib import Path
 import ants
 import h5py
 import numpy as np
-import tensorflow as tf
-import voxelmorph as vxm
+
+# import tensorflow as tf
 from skimage.exposure import equalize_adapthist
 
 from bifrost.io import guarded_ants_image_read, md5sum, read_weights_inshape, write_affine, write_image
@@ -22,7 +22,7 @@ from bifrost.util import transpose_image, update_image_array
 # hide GPUs
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 # suppress tensorflow import warnings
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0 = all, 1 = info, 2 = warning, 3 = error
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "1")  # 0 = all, 1 = info, 2 = warning, 3 = error
 
 # Set default target shape for SynthMorph:
 
@@ -54,6 +54,16 @@ def register(args):
         stdout_handler.setLevel(logging.INFO)
     else:
         stdout_handler.setLevel(logging.CRITICAL + 1)
+
+    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
+        try:
+            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
+            logger.setLevel(log_level)
+            stdout_handler.setLevel(log_level)
+            error_handler.setLevel(log_level)
+        except AttributeError:
+            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
+            sys.exit(1)
 
     # ========================================================================== #
     #                              PATH LOGIC                                    #
@@ -113,6 +123,8 @@ def register(args):
     logger.addHandler(file_handler)
 
     logger.debug("Parsed args: %s", args)
+
+    import tensorflow as tf  # noqa: PLC0415 I001
 
     with h5py.File(f"{results_dir}/transform.h5", "w") as h5_handle:
         for arg_name, arg_val in vars(args).items():
@@ -369,6 +381,8 @@ def register(args):
 
             inshape = moving.shape[1:-1]
             nb_feats = moving.shape[-1]
+
+            import voxelmorph as vxm  # noqa: PLC0415 I001
 
             with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 # load model

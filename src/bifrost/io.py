@@ -82,7 +82,7 @@ def write_image(h5_handle: h5py.File, name: str | Path, image: ants.ANTsImage | 
         image: if str interpreted as path to image file - ANTsImage or str
     """
     name = name if isinstance(name, str) else str(name)
-    image = image if isinstance(image, ants.ANTsImage) else ants.image_read(image)
+    image = image if isinstance(image, ants.ANTsImage) else ants.image_read(str(image))
     image_arr = image.numpy()
     h5_handle.create_dataset(
         name,
@@ -99,7 +99,7 @@ def write_image(h5_handle: h5py.File, name: str | Path, image: ants.ANTsImage | 
     h5_handle[name].attrs["has_components"] = image.has_components
 
 
-def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | None = None) -> ants.ANTsImage | Path:
+def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | None = None) -> ants.ANTsImage | str:
     """Reads ANTs image from h5.
 
     If directory is not None, writes to a file and returns absolute path
@@ -128,7 +128,7 @@ def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | N
     if img_path.exists():
         raise FileExistsError(f"Image file {img_path} already exists. Please choose a different directory or remove the existing file.")
     ants.image_write(image, str(img_path))
-    return img_path
+    return str(img_path)
 
 
 def guarded_ants_image_read(image_path: str | Path) -> ants.ANTsImage:
@@ -185,7 +185,7 @@ def read_weights_inshape(path: str | Path) -> tuple[int, int, int]:
         KeyError: If the required 'model_config.config.inshape' attribute is missing.
         ValueError: If the JSON cannot be decoded or the inshape cannot be converted to integers or is not a 3-tuple.
     """
-    with h5py.File(str(path), "rb") as h5_handle:
+    with h5py.File(str(path), "r") as h5_handle:
         try:
             inshape_obj: list[int | float] = json.loads(str(h5_handle.attrs["model_config"]))["config"]["inshape"]
         except KeyError as e:
