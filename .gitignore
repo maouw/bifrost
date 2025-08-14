@@ -128,7 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-
 # emacs temp files
 .#*
 
@@ -139,3 +138,5 @@ dmypy.json
 
 # demo data
 demo/
+
+typings/
