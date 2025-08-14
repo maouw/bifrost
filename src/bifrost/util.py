@@ -2,12 +2,12 @@
 
 import argparse
 import hashlib
+import os
 from collections.abc import Sequence
 
 import ants
 import numpy as np
 import numpy.typing as npt
-import platformdirs
 
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
@@ -22,7 +22,7 @@ def update_image_array(image: ants.ANTsImage, updated: npt.NDArray) -> ants.ANTs
     Returns:
         updated_image: the updated ANTsImage
     """
-    assert image.numpy().shape == updated.shape
+    assert image.shape == updated.shape, f"Shape mismatch: {image.shape} != {updated.shape}. Ensure the updated array has the same shape as the original image."
 
     updated_image = ants.from_numpy(
         updated,
@@ -47,7 +47,7 @@ def threshold_image(image: ants.ANTsImage, threshold: float) -> ants.ANTsImage:
     """
     image_arr = image.numpy()
 
-    image_arr[image_arr <= threshold] = 0
+    image_arr[image_arr <= threshold] = 0.0
 
     thresholded_image = ants.from_numpy(
         image_arr,
@@ -74,12 +74,11 @@ def transpose_image(image: ants.ANTsImage, transposition: npt.NDArray) -> ants.A
     np.testing.assert_array_equal(np.sort(transposition), np.arange(len(transposition)))
 
     def _permute(arr):
+        # return arr[transposition]
         return [arr[idx] for idx in transposition]
-        return np.array(arr)[transposition]
+        # return np.array(arr)[transposition]
 
-    image_arr = image.numpy()
-
-    image_arr = np.transpose(image_arr, transposition)
+    image_arr = np.transpose(image.numpy(), transposition)
 
     transposed_image = ants.from_numpy(
         image_arr,
@@ -106,7 +105,7 @@ def dice_coefficient(image_1: npt.NDArray, image_2: npt.NDArray, exclude_labels:
         mean_coeff: float
         label_coeffs: map of label to dice coeff - dict
     """
-    assert image_1.shape == image_2.shape
+    assert image_1.shape == image_2.shape, f"Shape mismatch: {image_1.shape} != {image_2.shape}. Ensure both images have the same shape."
 
     labels = np.unique(image_1)
     np.testing.assert_allclose(labels, np.unique(image_2))  # assert all(labels == np.unique(image_2))
@@ -115,12 +114,11 @@ def dice_coefficient(image_1: npt.NDArray, image_2: npt.NDArray, exclude_labels:
 
     exclude_labels = set(exclude_labels)
     for label in labels:
-        #        assert float(label).is_integer()
+        assert float(label).is_integer()
 
         if label not in exclude_labels:
             mask_1 = image_1 == label
             mask_2 = image_2 == label
-
             label_coeffs[int(label)] = 2 * np.sum(mask_1 * mask_2) / (np.sum(mask_1) + np.sum(mask_2))
 
     mean_coeff = np.mean(list(label_coeffs.values()))
@@ -144,9 +142,14 @@ class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
             parts = "\n".join(parts.split("\n")[1:])
         return parts
 
+def default_arg_from_env_var(env_var, value_name="default"):
+    """Returns a default argument from an environment variable for use in argparse.
 
-def get_default_bifrost_weights_path(filename="shapes.h5"):
-    """Returns the default path to the Bifrost weights file."""
-    # Use platformdirs to get the site data path for Bifrost
-    bifrost_data_dir = platformdirs.site_data_path("bifrost")
-    return bifrost_data_dir / "weights" / filename
+    Args:
+        env_var: the environment variable to read
+        value_name: name of the value to return in the dictionary
+    Returns:
+        A dictionary with the value_name as key and the environment variable value as value, or an empty dictionary if the variable is not set.
+    """
+    v = os.environ.get(env_var)
+    return {value_name: v} if v else {}

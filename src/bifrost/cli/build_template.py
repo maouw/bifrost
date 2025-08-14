@@ -24,7 +24,6 @@ from bifrost.util import sha256, update_image_array
 
 
 def build_template(args: argparse.Namespace) -> None:
-    
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -77,9 +76,7 @@ def build_template(args: argparse.Namespace) -> None:
             elif args.preemptible:
                 logger.info("Resuming existing work")
             else:
-                logger.warning(
-                    "Results directory already exists. Run again with --force to override or --preemptible to resume"
-                )
+                logger.warning("Results directory already exists. Run again with --force to override or --preemptible to resume")
                 return
 
         os.makedirs(args.output, exist_ok=True)
@@ -245,7 +242,7 @@ def __legacy_preprocess(image: ants.ANTsImage):
     image_copy = image_arr.copy().astype("float32")
     image_copy = scipy.ndimage.gaussian_filter(image_copy, sigma=10)
     threshold = triangle(image_copy)
-    image_copy[np.where(image_copy < threshold / 2)] = 0
+    image_copy[np.where(image_copy < threshold / 2)] = 0.0
 
     # Remove blobs outside contiguous brain
     labels, label_nb = scipy.ndimage.label(image_copy)
@@ -378,9 +375,7 @@ def alignment_iteration(
 
                         moving_mirror = update_image_array(moving, moving[::-1])
 
-                        registration_mirror = ants.registration(
-                            fixed, moving_mirror, type_of_transform=type_of_transform
-                        )
+                        registration_mirror = ants.registration(fixed, moving_mirror, type_of_transform=type_of_transform)
 
                         __write_step_output(
                             registration_mirror,

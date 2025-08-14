@@ -4,9 +4,11 @@ Execute using the 'bifrost' executable installed by setuptools
 """
 
 import argparse
+from encodings.punycode import T
+import os
 import sys
 
-from bifrost.util import SubcommandHelpFormatter, get_default_bifrost_weights_path
+from bifrost.util import SubcommandHelpFormatter, default_arg_from_env_var
 
 
 def main():
@@ -55,10 +57,7 @@ def main():
     parser_register.add_argument("results_dir", help=results_dir_help)
 
     parser_register.add_argument(
-        "--weights",
-        help=f"Path to weights file. If not specified, uses default BIFROST weights at {get_default_bifrost_weights_path()}",
-        default=str(get_default_bifrost_weights_path()),
-        type=str,
+        "--weights", **default_arg_from_env_var("BIFROST_WEIGHTS_PATH"), required=True, help="Path to weights file [default: $BIFROST_WEIGHTS_PATH]", type=str
     )
 
     clahe_kernel_size_help = (
@@ -99,10 +98,7 @@ def main():
     mirror_help = "Mirror warp. Axis selected automatically based on similarity"
     parser_register.add_argument("--mirror_warp", help=mirror_help, action="store_true")
 
-    keep_intermediates_help = (
-        "Keep intermediate results. By default only the final template is retained. "
-        "Useful for diagnosing registration problems."
-    )
+    keep_intermediates_help = "Keep intermediate results. By default only the final template is retained. Useful for diagnosing registration problems."
     parser_register.add_argument("--keep_intermediates", help=keep_intermediates_help, action="store_true")
 
     force_help = "Force override of results directory, if it already exists"

@@ -16,17 +16,18 @@ import tensorflow as tf
 import voxelmorph as vxm
 from skimage.exposure import equalize_adapthist
 
-from bifrost.io import guarded_ants_image_read, md5sum, write_affine, write_image
-from bifrost.util import get_default_bifrost_weights_path, transpose_image, update_image_array
+from bifrost.io import guarded_ants_image_read, md5sum, read_weights_inshape, write_affine, write_image
+from bifrost.util import transpose_image, update_image_array
 
 # hide GPUs
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 # suppress tensorflow import warnings
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0 = all, 1 = info, 2 = warning, 3 = error
 
+# Set default target shape for SynthMorph:
 
 TARGET_SHAPE = (160, 160, 192)
-DEVICE = "/CPU:0"
+
 
 def register(args):
     # ========================================================================== #
@@ -73,17 +74,15 @@ def register(args):
             return
     else:
         os.makedirs(results_dir)
-        
-        
-    BIFROST_WEIGHTS_PATH = get_default_bifrost_weights_path()
-    if args.weights is not None:
-        BIFROST_WEIGHTS_PATH = Path(args.weights).resolve()
-        logger.info("Using custom weights from %s", BIFROST_WEIGHTS_PATH)
-    else:
-        logger.info("Using default BIFROST weights from %s", BIFROST_WEIGHTS_PATH)
 
-    if not BIFROST_WEIGHTS_PATH.exists():
-        raise FileNotFoundError(f"Bifrost weights not found at {BIFROST_WEIGHTS_PATH}. Have you downloaded them?")
+    args.weights = str(Path(args.weights).expanduser())
+    logger.info("Using weights from %s", args.weights)
+    if not os.access(args.weights, os.F_OK | os.R_OK):
+        logger.error("Weights file %s is unreadable or does not exist.", args.weights)
+
+    weights_shape = read_weights_inshape(args.weights)
+    if weights_shape != TARGET_SHAPE:
+        logger.warning("Weights shape %s does not match default target shape %s. This may lead to unexpected results.", weights_shape, TARGET_SHAPE)
 
     # ========================================================================== #
     #                          INPUT VALIDATION                                  #
@@ -162,9 +161,7 @@ def register(args):
                 )
                 and args.downsample_to > 0
             ):
-                logger.warning(
-                    "Discrepancy between SynthMorph mask metadata and moving image metadata prior to resampling."
-                )
+                logger.warning("Discrepancy between SynthMorph mask metadata and moving image metadata prior to resampling.")
 
             if args.downsample_to > 0:
                 desired_spacing = (args.downsample_to,) * 3
@@ -249,7 +246,7 @@ def register(args):
         # ========================================================================== #
         #                                  AFFINE                                    #
         # ========================================================================== #
-
+        registered_nii_path = Path(results_dir, "registered.nii")
         if args.skip_affine:
             full_res_moving = moving_img
         else:
@@ -261,9 +258,7 @@ def register(args):
 
             if args.synthmorph_mask is not None:
                 logger.info("Applying affine transform to SynthMorph mask")
-                synthmorph_mask = ants.apply_transforms(
-                    fixed_img, synthmorph_mask, transformlist=affine["fwdtransforms"]
-                )
+                synthmorph_mask = ants.apply_transforms(fixed_img, synthmorph_mask, transformlist=affine["fwdtransforms"])
 
             # NOTE: for some inexplicable reason ants returns identical files
             # for forward and reverse transforms, so we need only store one
@@ -271,11 +266,11 @@ def register(args):
             write_affine(h5_handle, "/affine", affine["fwdtransforms"][0])
 
             # write intermediate result
-            ants.image_write(moving_img, f"{results_dir}/registered.nii")
-            logger.debug("Wrote affine warpedmovout to %s", f"{results_dir}/registered.nii")
+            ants.image_write(moving_img, str(registered_nii_path))
+            logger.debug("Wrote affine warpedmovout to %s", registered_nii_path)
 
             if args.keep_intermediates:
-                shutil.copy(f"{results_dir}/registered.nii", f"{results_dir}/affine.nii")
+                shutil.copy(registered_nii_path, registered_nii_path.with_name("affine.nii"))
 
         # ========================================================================== #
         #                           CALCULATE TRANSPOSITION                          #
@@ -332,12 +327,12 @@ def register(args):
             write_image(h5_handle, "/syn/forward_warp", syn["fwdtransforms"][0])
 
             # write intermediate result, cleaning existing if it exists
-            Path(f"{results_dir}/registered.nii").unlink(missing_ok=True)
-            ants.image_write(moving_img, f"{results_dir}/registered.nii")
-            logger.debug("Wrote SyN warpedmovout to %s", f"{results_dir}/registered.nii")
+            registered_nii_path.unlink(missing_ok=True)
+            ants.image_write(moving_img, str(registered_nii_path))
+            logger.debug("Wrote SyN warpedmovout to %s", registered_nii_path)
 
             if args.keep_intermediates:
-                shutil.copy(f"{results_dir}/registered.nii", f"{results_dir}/syn.nii")
+                shutil.copy(registered_nii_path, registered_nii_path.with_name("syn.nii"))
 
         # ========================================================================== #
         #                                SYNTHMORPH                                  #
@@ -375,9 +370,9 @@ def register(args):
             inshape = moving.shape[1:-1]
             nb_feats = moving.shape[-1]
 
-            with tf.device(DEVICE):
+            with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 # load model
-                model = vxm.networks.VxmDense.load(BIFROST_WEIGHTS_PATH)
+                model = vxm.networks.VxmDense.load(args.weights)
 
                 logger.info("Running inference")
 
@@ -386,11 +381,9 @@ def register(args):
 
                 # symmetrize warp
                 if args.mirror_warp:
-                    flipped_warp = np.flip(warp, mirror_axis + 1)
+                    flipped_warp = np.flip(warp, int(mirror_axis) + 1)  # np.flip(warp, mirror_axis + 1)
                     mirrored_warp = np.mean([warp, flipped_warp], axis=0)
-                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean([warp, -flipped_warp], axis=0)[
-                        :, :, :, :, mirror_axis
-                    ]
+                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean([warp, -flipped_warp], axis=0)[:, :, :, :, mirror_axis]
                     warp = mirrored_warp
 
                 moved = vxm.networks.Transform(inshape, nb_feats=nb_feats).predict([moving, warp])
@@ -434,7 +427,7 @@ def register(args):
 
             logger.info("Applying upsampled warp")
 
-            with tf.device(DEVICE):
+            with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 transform = vxm.networks.Transform(full_res_moving.shape, nb_feats=1)
                 warped = transform.predict(
                     [
@@ -444,6 +437,7 @@ def register(args):
                 ).squeeze()
 
             if args.synthmorph_mask is not None:
+                assert synthmorph_mask is not None, "SynthMorph mask should be defined if SynthMorph is enabled"
                 synthmorph_mask = transpose_image(synthmorph_mask, optimal_transposition).numpy() > 0
                 warped[synthmorph_mask] = full_res_moving[synthmorph_mask]
 
@@ -451,9 +445,6 @@ def register(args):
             warped.set_spacing(full_res_moving.spacing)
 
             # write final result, removing the intermediate result if it exists
-            Path(f"{results_dir}/registered.nii").unlink(missing_ok=True)
-            ants.image_write(warped, f"{results_dir}/registered.nii")
-            logger.debug(
-                "Wrote final SynthMorph transformed image to %s",
-                f"{results_dir}/registered.nii",
-            )
+            registered_nii_path.unlink(missing_ok=True)
+            ants.image_write(warped, str(registered_nii_path))
+            logger.debug("Wrote final SynthMorph transformed image to %s", registered_nii_path)

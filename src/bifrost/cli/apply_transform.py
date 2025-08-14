@@ -105,18 +105,14 @@ def transform(args):
         if h5_handle.attrs["args.downsample_to"] > 0:
             desired_spacing = (h5_handle.attrs["args.downsample_to"],) * 3
 
-            logger.info(
-                f"Resampling image. Current resolution: {moving_img.spacing}, Desired resolution: {desired_spacing}"
-            )
+            logger.info(f"Resampling image. Current resolution: {moving_img.spacing}, Desired resolution: {desired_spacing}")
 
             moving_img = ants.resample_image(moving_img, desired_spacing, interp_type=resample_method)
 
             fixed_img = ants.resample_image(fixed_img, desired_spacing, interp_type=resample_method)
 
             if lobe_mask is not None:
-                logger.info(
-                    f"Resampling mask. Current resolution: {lobe_mask.spacing}, Desired resolution: {desired_spacing}"
-                )
+                logger.info(f"Resampling mask. Current resolution: {lobe_mask.spacing}, Desired resolution: {desired_spacing}")
 
                 lobe_mask = ants.resample_image(lobe_mask, desired_spacing, interp_type=1)
 
