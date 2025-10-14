@@ -4,14 +4,14 @@ Execute using the 'bifrost' executable installed by setuptools
 """
 
 import argparse
-from encodings.punycode import T
 import os
 import sys
-
+import shlex
+from collections.abc import Sequence
 from bifrost.util import SubcommandHelpFormatter, default_arg_from_env_var
 
 
-def main():
+def main(args: Sequence[str] | None = None):
     parser = argparse.ArgumentParser(
         description="BIFROST: template building and cross-modal registration",
         epilog="If you find this tool useful, please cite the BIFROST paper",
@@ -56,9 +56,11 @@ def main():
     results_dir_help = "Absolute path to write results"
     parser_register.add_argument("results_dir", help=results_dir_help)
 
-    parser_register.add_argument(
-        "--weights", **default_arg_from_env_var("BIFROST_WEIGHTS_PATH"), required=True, help="Path to weights file [default: $BIFROST_WEIGHTS_PATH]", type=str
-    )
+    weights_help = "Path to SynthMorph weights file"
+    BIFROST_WEIGHTS_PATH = os.environ.get("BIFROST_WEIGHTS_PATH", None)
+    if BIFROST_WEIGHTS_PATH:
+        weights_help += f" [default: {shlex.quote(BIFROST_WEIGHTS_PATH)}]"
+    parser_register.add_argument("--weights", **default_arg_from_env_var("BIFROST_WEIGHTS_PATH"), required=True, help=weights_help)
 
     clahe_kernel_size_help = (
         "Kernel size for contrast-limited adaptive histogram equalization. "
@@ -205,9 +207,8 @@ def main():
     if len(sys.argv) == 1:
         parser.print_help()
     else:
-        args = parser.parse_args()
-
-        args.func(args)
+        parsed_args = parser.parse_args(args)
+        return parsed_args.func(args)
 
 
 def register_dispatch(args):

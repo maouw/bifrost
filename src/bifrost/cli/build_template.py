@@ -20,6 +20,7 @@ from sklearn.preprocessing import quantile_transform
 
 from bifrost.io import guarded_ants_image_read
 from bifrost.util import sha256, update_image_array
+from pathlib import Path
 
 
 def build_template(args: argparse.Namespace) -> None:
@@ -80,7 +81,7 @@ def build_template(args: argparse.Namespace) -> None:
         if os.path.exists(args.output):
             if args.force:
                 logger.info("Cleaning existing results directory")
-                shutil.rmtree(args.output)
+                shutil.rmtree(args.output, ignore_errors=True)
             elif args.preemptible:
                 logger.info("Resuming existing work")
             else:
@@ -208,8 +209,8 @@ def build_template(args: argparse.Namespace) -> None:
                 f"{args.output}/templates/syn_{args.syn_steps}.nii",
             )
         else:
-            shutil.rmtree(f"{args.output}/preprocessed")
-            shutil.rmtree(f"{args.output}/templates")
+            shutil.rmtree(f"{args.output}/preprocessed", ignore_errors=True)
+            shutil.rmtree(f"{args.output}/templates", ignore_errors=True)
 
         logger.info("Template generation complete")
 
@@ -219,7 +220,7 @@ def build_template(args: argparse.Namespace) -> None:
 
     finally:
         logger.info("Exiting, cleaning scratch")
-        shutil.rmtree(f"{args.output}/scratch")
+        shutil.rmtree(f"{args.output}/scratch", ignore_errors=True)
 
 
 def preprocess(args, input_path, output_path):
@@ -361,7 +362,9 @@ def alignment_iteration(
 
                     moving = ants.image_read(input_path)
 
-                    registration = ants.registration(fixed, moving, type_of_transform=type_of_transform)
+                    registration = ants.registration(
+                        fixed, moving, type_of_transform=type_of_transform, verbose=args.verbose, outprefix=f"{step_dir}/{input_name}"
+                    )
 
                     __write_step_output(
                         registration,
@@ -383,7 +386,9 @@ def alignment_iteration(
 
                         moving_mirror = update_image_array(moving, moving[::-1])
 
-                        registration_mirror = ants.registration(fixed, moving_mirror, type_of_transform=type_of_transform)
+                        registration_mirror = ants.registration(
+                            fixed, moving_mirror, type_of_transform=type_of_transform, verbose=args.verbose, outprefix=f"{step_dir}/{input_name}_m"
+                        )
 
                         __write_step_output(
                             registration_mirror,

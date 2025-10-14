@@ -12,7 +12,7 @@ import numpy.typing as npt
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
 
-def update_image_array(image: ants.ANTsImage, updated: np.ndarray) -> ants.ANTsImage:
+def update_image_array(image: ants.ANTsImage, updated: ants.ANTsImage | npt.NDArray) -> ants.ANTsImage:
     """Update ANTsImage image array but preserve metadata.
 
     Args:
@@ -24,15 +24,9 @@ def update_image_array(image: ants.ANTsImage, updated: np.ndarray) -> ants.ANTsI
     """
     assert image.numpy().shape == updated.shape
     # assert image.shape == updated.shape, f"Shape mismatch: {image.shape} != {updated.shape}. Ensure the updated array has the same shape as the original image."
-
-    updated_image = ants.from_numpy(
-        updated,
-        origin=image.origin,
-        spacing=image.spacing,
-        direction=image.direction,
-        has_components=image.has_components,
-    )
-
+    if not isinstance(updated, np.ndarray):
+        updated = updated.numpy()
+    updated_image = image.new_image_like(updated)
     return updated_image
 
 

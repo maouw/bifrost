@@ -263,7 +263,7 @@ def register(args):
             full_res_moving = moving_img
         else:
             logger.info("Running affine alignment")
-            affine = ants.registration(fixed_img, moving_img, type_of_transform="Affine")
+            affine = ants.registration(fixed_img, moving_img, type_of_transform="Affine", verbose=args.verbose, outprefix=f"{results_dir}/affine_iter_")
 
             moving_img = affine["warpedmovout"]
             full_res_moving = moving_img
@@ -322,7 +322,7 @@ def register(args):
 
         if not args.skip_syn:
             logger.info("Running SyN pre-registration")
-            syn = ants.registration(fixed_img, moving_img, type_of_transform="SyN")
+            syn = ants.registration(fixed_img, moving_img, type_of_transform="SyN", verbose=args.verbose, outprefix=f"{results_dir}/syn_iter_")
 
             moving_img = syn["warpedmovout"]
             full_res_moving = moving_img

@@ -190,7 +190,7 @@ def read_weights_inshape(path: str | Path) -> tuple[int, int, int]:
             inshape_obj: list[int | float] = json.loads(str(h5_handle.attrs["model_config"]))["config"]["inshape"]
         except KeyError as e:
             raise KeyError("The weights file does not contain a 'model_config.config.inshape' attribute: {e}") from e
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, TypeError) as e:
             raise ValueError("Failed to decode 'model_config' JSON") from e
         try:
             inshape = np.asarray(inshape_obj).astype(dtype=int, casting="safe")
