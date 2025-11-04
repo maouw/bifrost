@@ -276,7 +276,6 @@ def main(args: Sequence[str] | None = None):
         choices=["CLAHE", "legacy"],
         type=str,
     )
-
     mode_group = parser_build_template.add_mutually_exclusive_group()
 
     force_help = "Force override of output directory, if it already exists"
@@ -304,24 +303,33 @@ def main(args: Sequence[str] | None = None):
     if len(sys.argv) == 1:
         parser.print_help()
     else:
+        print(f"{args=}")
         parsed_args = parser.parse_args(args)
-        return parsed_args.func(args)
+        print(f"{parsed_args=}")
+        return parsed_args.func(parsed_args)
     return None
+
+
+def namespace_to_dataclass(namespace, dataclass_type):
+    """Convert argparse.Namespace to dataclass instance."""
+    args_dict = vars(namespace)
+    del args_dict["func"]
+    return dataclass_type(**args_dict)
 
 
 def register_dispatch(args):
     from bifrost.cli.register import register
 
-    register(args)
+    register(namespace_to_dataclass(args, RegisterArgs))
 
 
 def transform_dispatch(args):
     from bifrost.cli.apply_transform import transform
 
-    transform(args)
+    transform(namespace_to_dataclass(args, TransformArgs))
 
 
 def build_template_dispatch(args):
     from bifrost.cli.build_template import build_template
 
-    build_template(args)
+    build_template(namespace_to_dataclass(args, BuildTemplateArgs))
