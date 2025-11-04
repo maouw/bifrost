@@ -7,7 +7,7 @@ import logging
 import os
 import shutil
 import sys
-from glob import glob
+from pathlib import Path
 
 import ants
 import numpy as np
@@ -62,22 +62,25 @@ def build_template(args: BuildTemplateArgs) -> None:
         #                              PATH LOGIC                                    #
         # ========================================================================== #
 
-        input_paths = []
+        input_paths: list[Path] = []
 
-        for input_path in args.input:
-            assert os.path.exists(input_path)
+        for input_path_str in args.input:
+            input_path = Path(input_path_str)
+            assert input_path.exists()
 
-            if os.path.isdir(input_path):
-                input_paths.extend([f"{input_path}/{input_file}" for input_file in os.listdir(input_path)])
+            if input_path.is_dir():
+                input_paths.extend(input_path.iterdir())
             else:
                 input_paths.append(input_path)
 
         logger.debug("Parsed input files: %s", input_paths)
 
+        reference_image_path: Path | None = None
         if args.reference_image is not None:
-            assert os.path.exists(args.reference_image)
+            reference_image_path = Path(args.reference_image)
+            assert reference_image_path.exists()
 
-        if os.path.exists(args.output):
+        if args.output.exists():
             if args.force:
                 logger.info("Cleaning existing results directory")
                 shutil.rmtree(args.output, ignore_errors=True)
@@ -89,19 +92,19 @@ def build_template(args: BuildTemplateArgs) -> None:
                 )
                 return
 
-        os.makedirs(args.output, exist_ok=True)
-        os.makedirs(f"{args.output}/preprocessed", exist_ok=True)
-        os.makedirs(f"{args.output}/templates", exist_ok=True)
-        os.makedirs(f"{args.output}/scratch", exist_ok=True)
+        args.output.mkdir(parents=True, exist_ok=True)
+        (args.output / "preprocessed").mkdir(exist_ok=True)
+        (args.output / "templates").mkdir(exist_ok=True)
+        (args.output / "scratch").mkdir(exist_ok=True)
 
         # ========================================================================== #
         #                      CONFIGURE LOG FILE HANDLER                            #
         # ========================================================================== #
 
         if args.log is None:
-            log_path = f"{args.output}/build_template.log"
+            log_path = args.output / "build_template.log"
         else:
-            log_path = args.log
+            log_path = Path(args.log)
 
         logger.info("Writings logs to %s", log_path)
 
@@ -125,10 +128,10 @@ def build_template(args: BuildTemplateArgs) -> None:
         )
 
         for input_path in input_paths:
-            name = os.path.basename(input_path).split(".")[0]
-            output_path = f"{args.output}/preprocessed/{sha256(str(input_path).encode())}_{name}.nii"
+            name = input_path.stem
+            output_path = args.output / "preprocessed" / f"{sha256(str(input_path).encode())}_{name}.nii"
 
-            if not os.path.exists(output_path):
+            if not output_path.exists():
                 logger.info("Preprocessing %s", input_path)
                 preprocess(args, input_path, output_path)
             else:
@@ -138,15 +141,15 @@ def build_template(args: BuildTemplateArgs) -> None:
         #                                  AFFINE                                    #
         # ========================================================================== #
 
-        if args.reference_image is not None:
-            initial_image = args.reference_image
+        if reference_image_path is not None:
+            initial_image = reference_image_path
         else:
             initial_image = input_paths[0]
 
         logger.info("Starting affine step 0")
         alignment_iteration(
             args,
-            moving_dir=f"{args.output}/preprocessed",
+            moving_dir=args.output / "preprocessed",
             step_name="affine_0",
             fixed_path=initial_image,
             type_of_transform="Affine",
@@ -159,9 +162,9 @@ def build_template(args: BuildTemplateArgs) -> None:
 
             alignment_iteration(
                 args,
-                moving_dir=f"{args.output}/scratch/affine_{affine_step - 1}",
+                moving_dir=args.output / "scratch" / f"affine_{affine_step - 1}",
                 step_name=f"affine_{affine_step}",
-                fixed_path=f"{args.output}/templates/affine_{affine_step - 1}.nii",
+                fixed_path=args.output / "templates" / f"affine_{affine_step - 1}.nii",
                 type_of_transform="Affine",
                 transform_avg=False,
                 mirror=False,
@@ -175,9 +178,9 @@ def build_template(args: BuildTemplateArgs) -> None:
 
         alignment_iteration(
             args,
-            moving_dir=f"{args.output}/scratch/affine_{args.affine_steps - 1}",
+            moving_dir=args.output / "scratch" / f"affine_{args.affine_steps - 1}",
             step_name="syn_0",
-            fixed_path=f"{args.output}/templates/affine_{args.affine_steps - 1}.nii",
+            fixed_path=args.output / "templates" / f"affine_{args.affine_steps - 1}.nii",
             type_of_transform="SyN",
             transform_avg=True,
             mirror=False,
@@ -188,9 +191,9 @@ def build_template(args: BuildTemplateArgs) -> None:
 
             alignment_iteration(
                 args,
-                moving_dir=f"{args.output}/scratch/syn_{syn_step - 1}",
+                moving_dir=args.output / "scratch" / f"syn_{syn_step - 1}",
                 step_name=f"syn_{syn_step}",
-                fixed_path=f"{args.output}/templates/syn_{syn_step - 1}.nii",
+                fixed_path=args.output / "templates" / f"syn_{syn_step - 1}.nii",
                 type_of_transform="SyN",
                 transform_avg=True,
                 mirror=False,
@@ -198,20 +201,19 @@ def build_template(args: BuildTemplateArgs) -> None:
 
         logger.info("Cleaning up")
 
+        final_template = args.output / "template.nii"
         shutil.move(
-            f"{args.output}/templates/syn_{args.syn_steps - 1}.nii",
-            f"{args.output}/template.nii",
+            str(args.output / "templates" / f"syn_{args.syn_steps - 1}.nii"),
+            str(final_template),
         )
 
         if args.keep_intermediates:
             # add back symlink for the final result which was moved
-            os.symlink(
-                f"{args.output}/template.nii",
-                f"{args.output}/templates/syn_{args.syn_steps}.nii",
-            )
+            symlink_path = args.output / "templates" / f"syn_{args.syn_steps}.nii"
+            symlink_path.symlink_to(final_template)
         else:
-            shutil.rmtree(f"{args.output}/preprocessed", ignore_errors=True)
-            shutil.rmtree(f"{args.output}/templates", ignore_errors=True)
+            shutil.rmtree(args.output / "preprocessed", ignore_errors=True)
+            shutil.rmtree(args.output / "templates", ignore_errors=True)
 
         logger.info("Template generation complete")
 
@@ -221,12 +223,12 @@ def build_template(args: BuildTemplateArgs) -> None:
 
     finally:
         logger.info("Exiting, cleaning scratch")
-        shutil.rmtree(f"{args.output}/scratch", ignore_errors=True)
+        shutil.rmtree(args.output / "scratch", ignore_errors=True)
 
 
-def preprocess(args, input_path, output_path):
+def preprocess(args: BuildTemplateArgs, input_path: Path, output_path: Path) -> None:
     """Runs all preprocessing."""
-    image = guarded_ants_image_read(input_path)
+    image = guarded_ants_image_read(str(input_path))
 
     if args.preprocessing is None:
         shutil.copy(input_path, output_path)
@@ -241,10 +243,10 @@ def preprocess(args, input_path, output_path):
 
         image = update_image_array(image, equalize_adapthist(image.numpy(), kernel_size=64, clip_limit=0.03))
 
-    ants.image_write(image, output_path)
+    ants.image_write(image, str(output_path))
 
 
-def __legacy_preprocess(image: ants.ANTsImage):
+def __legacy_preprocess(image: ants.ANTsImage) -> ants.ANTsImage:
     """Legacy preprocessing."""
     image_arr = image.numpy()
 
@@ -267,7 +269,7 @@ def __legacy_preprocess(image: ants.ANTsImage):
     return update_image_array(image, np.nan_to_num(image_copy))
 
 
-def generate_template(args, step_name, output_path, transform_avg):
+def generate_template(args: BuildTemplateArgs, step_name: str, output_path: Path, transform_avg: bool) -> None:
     """Generates template from registration results.
 
     Depending on the experiment type this either averages the images directly or 'averages' their transformations
@@ -275,11 +277,11 @@ def generate_template(args, step_name, output_path, transform_avg):
     logger = logging.getLogger(__name__)
     __retries = 0
 
-    assert str(output_path).endswith(".nii")
+    assert output_path.suffix == ".nii"
 
     while True:
         try:
-            input_path = f"{args.output}/scratch/{step_name}"
+            input_dir = args.output / "scratch" / step_name
 
             # 'average' transformations
             #
@@ -291,29 +293,29 @@ def generate_template(args, step_name, output_path, transform_avg):
             # it is, at least, a crude hack as implemented (https://github.com/ANTsX/ANTsPy/issues/125)
             #
             if transform_avg:
-                transform_dir = f"{args.output}/scratch/{step_name}_transform"
+                transform_dir = args.output / "scratch" / f"{step_name}_transform"
 
-                if os.path.exists(f"{transform_dir}/transform.nii"):
-                    logger.info("%s: found existing inverse average transform")
-                    avg_img = __average_images(f"{input_path}/*.nii")
+                if (transform_dir / "transform.nii").exists():
+                    logger.info("%s: found existing inverse average transform", step_name)
+                    avg_img = __average_images(input_dir / "*.nii")
                 else:
-                    os.makedirs(transform_dir, exist_ok=True)
+                    transform_dir.mkdir(parents=True, exist_ok=True)
 
-                    avg_img = __average_images(f"{input_path}/*.nii")
-                    avg_transform = __average_images(f"{input_path}/*.nii.gz")
+                    avg_img = __average_images(input_dir / "*.nii")
+                    avg_transform = __average_images(input_dir / "*.nii.gz")
 
                     # this could only ever be construed as an inverse if you squint, a lot
                     inv_avg_transform = avg_transform * -1 * args.gradient_step
 
-                    ants.image_write(inv_avg_transform, f"{transform_dir}/transform.nii")
+                    ants.image_write(inv_avg_transform, str(transform_dir / "transform.nii"))
 
-                template = ants.apply_transforms(avg_img, avg_img, f"{transform_dir}/transform.nii")
+                template = ants.apply_transforms(avg_img, avg_img, str(transform_dir / "transform.nii"))
 
-                ants.image_write(template, output_path)
+                ants.image_write(template, str(output_path))
 
             # average images directly
             else:
-                template = __average_images(f"{input_path}/*.nii")
+                template = __average_images(input_dir / "*.nii")
                 ants.image_write(template, str(output_path))
 
             break
@@ -329,32 +331,33 @@ def generate_template(args, step_name, output_path, transform_avg):
 
 
 def alignment_iteration(
-    args,
-    moving_dir,
-    step_name,
-    fixed_path,
-    type_of_transform,
-    transform_avg,
-    mirror,
-):
+    args: BuildTemplateArgs,
+    moving_dir: Path,
+    step_name: str,
+    fixed_path: Path,
+    type_of_transform: str,
+    transform_avg: bool,
+    mirror: bool,
+) -> None:
     logger = logging.getLogger(__name__)
     __retries = 0
 
-    step_dir = f"{args.output}/scratch/{step_name}"
-    os.makedirs(step_dir, exist_ok=True)
+    step_dir = args.output / "scratch" / step_name
+    step_dir.mkdir(parents=True, exist_ok=True)
 
-    if os.path.exists(f"{args.output}/templates/{step_name}.nii"):
+    template_path = args.output / "templates" / f"{step_name}.nii"
+    if template_path.exists():
         logger.info(f"{step_name} template already exists")
         return
 
     fixed = ants.image_read(str(fixed_path))
 
-    for input_path in glob(f"{moving_dir}/*.nii"):
+    for input_path in moving_dir.glob("*.nii"):
         input_name = None
 
         while True:
             try:
-                input_name = input_path.split("/")[-1].split(".")[0]
+                input_name = input_path.stem
 
                 if __step_output_exists(input_name, step_dir, transform_avg, False):
                     logger.info("%s: found cached result for %s ", step_name, input_name)
@@ -368,7 +371,7 @@ def alignment_iteration(
                         moving,
                         type_of_transform=type_of_transform,
                         verbose=args.verbose,
-                        outprefix=f"{step_dir}/{input_name}",
+                        outprefix=str(step_dir / input_name),
                     )
 
                     __write_step_output(
@@ -396,7 +399,7 @@ def alignment_iteration(
                             moving_mirror,
                             type_of_transform=type_of_transform,
                             verbose=args.verbose,
-                            outprefix=f"{step_dir}/{input_name}_m",
+                            outprefix=str(step_dir / f"{input_name}_m"),
                         )
 
                         __write_step_output(
@@ -424,74 +427,60 @@ def alignment_iteration(
     generate_template(
         args,
         step_name=step_name,
-        output_path=f"{args.output}/templates/{step_name}.nii",
+        output_path=template_path,
         transform_avg=transform_avg,
     )
 
     logger.info("Finished %s", step_name)
 
 
-def __average_images(pattern):
-    img_paths = glob(pattern)
+def __average_images(pattern: Path) -> ants.ANTsImage:
+    img_paths = list(pattern.parent.glob(pattern.name))
 
     img_0 = ants.image_read(str(img_paths[0]))
     avg_img = img_0.numpy() / len(img_paths)
 
     for img_path in img_paths[1:]:
-        avg_img += ants.image_read(img_path).numpy() / len(img_paths)
+        avg_img += ants.image_read(str(img_path)).numpy() / len(img_paths)
 
     return update_image_array(img_0, avg_img)
 
 
-def __write_step_output(registration, input_name, step_dir, write_transform, mirror):
-    suffix = ""
-    if mirror:
-        suffix = "_m"
+def __write_step_output(
+    registration: dict, input_name: str, step_dir: Path, write_transform: bool, mirror: bool
+) -> None:
+    suffix = "_m" if mirror else ""
 
     ants.image_write(
         registration["warpedmovout"],
-        f"{step_dir}/{input_name}{suffix}.nii",
+        str(step_dir / f"{input_name}{suffix}.nii"),
     )
 
     if write_transform:
         shutil.copy(
             registration["fwdtransforms"][0],
-            f"{step_dir}/{input_name}{suffix}_t.nii.gz",
+            str(step_dir / f"{input_name}{suffix}_t.nii.gz"),
         )
 
 
-def __step_output_exists(input_name, step_dir, write_transform, mirror):
-    suffix = ""
-    if mirror:
-        suffix = "_m"
+def __step_output_exists(input_name: str, step_dir: Path, write_transform: bool, mirror: bool) -> bool:
+    suffix = "_m" if mirror else ""
 
-    if not os.path.exists(f"{step_dir}/{input_name}{suffix}.nii"):
+    if not (step_dir / f"{input_name}{suffix}.nii").exists():
         return False
 
-    if write_transform and not os.path.exists(f"{step_dir}/{input_name}{suffix}_t.nii.gz"):
+    if write_transform and not (step_dir / f"{input_name}{suffix}_t.nii.gz").exists():
         return False
 
     return True
 
 
-def __clean_step_output(input_name, step_dir, mirror):
-    suffix = ""
-    if mirror:
-        suffix = "_m"
+def __clean_step_output(input_name: str, step_dir: Path, mirror: bool) -> None:
+    suffix = "_m" if mirror else ""
 
-    try:
-        os.remove(f"{step_dir}/{input_name}{suffix}.nii")
-    except FileNotFoundError:
-        pass
-
-    try:
-        os.remove(f"{step_dir}/{input_name}{suffix}_t.nii.gz")
-    except FileNotFoundError:
-        pass
+    (step_dir / f"{input_name}{suffix}.nii").unlink(missing_ok=True)
+    (step_dir / f"{input_name}{suffix}_t.nii.gz").unlink(missing_ok=True)
 
 
-def __clean_template(template_path):
-    try:
-        os.remove(template_path)
-    except FileNotFoundError:
-        pass
+def __clean_template(template_path: Path) -> None:
+    template_path.unlink(missing_ok=True)
