@@ -306,6 +306,7 @@ def main(args: Sequence[str] | None = None):
     else:
         parsed_args = parser.parse_args(args)
         return parsed_args.func(args)
+    return None
 
 
 def register_dispatch(args):

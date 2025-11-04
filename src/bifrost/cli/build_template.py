@@ -4,9 +4,7 @@ Execute using the 'bifrost' executable installed by setuptools
 """
 
 import logging
-import os
 import shutil
-import sys
 from pathlib import Path
 
 import ants
@@ -19,44 +17,16 @@ from sklearn.preprocessing import quantile_transform
 
 from bifrost.cli.bifrost import BuildTemplateArgs
 from bifrost.io import guarded_ants_image_read
-from bifrost.util import sha256, update_image_array
+from bifrost.util import setup_cli_logger, sha256, update_image_array
 
 
 def build_template(args: BuildTemplateArgs) -> None:
     # ========================================================================== #
-    #                      PARSE ARGS, CONFIGURE LOGGER                          #
+    #                      CONFIGURE LOGGER                                      #
     # ========================================================================== #
 
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    logger = setup_cli_logger(__name__, args.verbose, args.log)
 
-    stdout_handler = logging.StreamHandler(stream=sys.stdout)
-    # don't log errors, those get sent to stderr
-    stdout_handler.addFilter(lambda x: x.levelno < logging.WARNING)
-    logger.addHandler(stdout_handler)
-
-    error_handler = logging.StreamHandler(stream=sys.stderr)
-    error_handler.setLevel(logging.WARNING)
-    logger.addHandler(error_handler)
-
-    # ========================================================================== #
-    #                        CONFIGURE LOGGING VERBOSITY                         #
-    # ========================================================================== #
-
-    if args.verbose:
-        stdout_handler.setLevel(logging.INFO)
-    else:
-        stdout_handler.setLevel(logging.CRITICAL + 1)
-
-    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
-        try:
-            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
-            logger.setLevel(log_level)
-            stdout_handler.setLevel(log_level)
-            error_handler.setLevel(log_level)
-        except AttributeError:
-            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
-            sys.exit(1)
     try:
         # ========================================================================== #
         #                              PATH LOGIC                                    #
@@ -101,10 +71,7 @@ def build_template(args: BuildTemplateArgs) -> None:
         #                      CONFIGURE LOG FILE HANDLER                            #
         # ========================================================================== #
 
-        if args.log is None:
-            log_path = args.output / "build_template.log"
-        else:
-            log_path = Path(args.log)
+        log_path = args.output / "build_template.log" if args.log is None else Path(args.log)
 
         logger.info("Writings logs to %s", log_path)
 
@@ -141,10 +108,7 @@ def build_template(args: BuildTemplateArgs) -> None:
         #                                  AFFINE                                    #
         # ========================================================================== #
 
-        if reference_image_path is not None:
-            initial_image = reference_image_path
-        else:
-            initial_image = input_paths[0]
+        initial_image = reference_image_path if reference_image_path is not None else input_paths[0]
 
         logger.info("Starting affine step 0")
         alignment_iteration(
@@ -257,7 +221,7 @@ def __legacy_preprocess(image: ants.ANTsImage) -> ants.ANTsImage:
     image_copy[np.where(image_copy < threshold / 2)] = 0.0
 
     # Remove blobs outside contiguous brain
-    labels, label_nb = scipy.ndimage.label(image_copy)
+    labels, _label_nb = scipy.ndimage.label(image_copy)
     image_label = (np.bincount(labels.flatten())[1:].argmax()) + 1
     image_copy = image_arr.copy().astype("float32")
     image_copy[np.where(labels != image_label)] = np.nan
@@ -469,10 +433,7 @@ def __step_output_exists(input_name: str, step_dir: Path, write_transform: bool,
     if not (step_dir / f"{input_name}{suffix}.nii").exists():
         return False
 
-    if write_transform and not (step_dir / f"{input_name}{suffix}_t.nii.gz").exists():
-        return False
-
-    return True
+    return not (write_transform and not (step_dir / f"{input_name}{suffix}_t.nii.gz").exists())
 
 
 def __clean_step_output(input_name: str, step_dir: Path, mirror: bool) -> None:

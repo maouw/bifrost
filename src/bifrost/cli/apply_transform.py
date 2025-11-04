@@ -3,9 +3,7 @@
 Execute using the 'bifrost' executable installed by setuptools
 """
 
-import logging
 import os
-import sys
 import tempfile
 from pathlib import Path
 
@@ -16,7 +14,7 @@ from skimage.exposure import equalize_adapthist
 
 from bifrost.cli.bifrost import TransformArgs
 from bifrost.io import guarded_ants_image_read, md5sum, read_affine, read_image
-from bifrost.util import transpose_image, update_image_array
+from bifrost.util import setup_cli_logger, transpose_image, update_image_array
 
 # hide GPUs
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -27,58 +25,10 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0 = all, 1 = info, 2 = war
 
 def transform(args: TransformArgs) -> None:
     # ========================================================================== #
-    #                      PARSE ARGS, CONFIGURE LOGGER                          #
-    # ========================================================================== #
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-
-    stdout_handler = logging.StreamHandler(stream=sys.stdout)
-    # don't log errors, those get sent to stderr
-    stdout_handler.addFilter(lambda x: x.levelno < logging.WARNING)
-    logger.addHandler(stdout_handler)
-
-    error_handler = logging.StreamHandler(stream=sys.stderr)
-    error_handler.setLevel(logging.WARNING)
-    logger.addHandler(error_handler)
-
-    # ========================================================================== #
-    #                        CONFIGURE LOGGING VERBOSITY                         #
+    #                      CONFIGURE LOGGER                                      #
     # ========================================================================== #
 
-    if args.verbose:
-        stdout_handler.setLevel(logging.INFO)
-    else:
-        stdout_handler.setLevel(logging.CRITICAL + 1)
-
-    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
-        try:
-            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
-            logger.setLevel(log_level)
-            stdout_handler.setLevel(log_level)
-            error_handler.setLevel(log_level)
-        except AttributeError:
-            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
-            sys.exit(1)
-
-    # ========================================================================== #
-    #                      CONFIGURE LOG FILE HANDLER                            #
-    # ========================================================================== #
-
-    if args.log is None:
-        log_name = f"{Path(args.image_path).name.split('.')[0]}_apply_transform.log"
-        log_path = f"{args.alignment_path}/{log_name}"
-    else:
-        log_path = args.log
-
-    logger.info("Writings logs to %s", log_path)
-
-    file_handler = logging.FileHandler(log_path)
-    file_handler.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    file_handler.setFormatter(formatter)
-
-    logger.addHandler(file_handler)
+    logger = setup_cli_logger(__name__, args.verbose, args.log)
 
     # ========================================================================== #
     #                             INPUT VALIDATION                               #
@@ -241,8 +191,8 @@ def transform(args: TransformArgs) -> None:
                     transform = vxm.networks.Transform(moving_img.shape, nb_feats=1, interp_method="nearest")
                     warped = transform.predict(
                         [
-                            moving_img.numpy().reshape((1,) + moving_img.shape + (1,)),
-                            warp.reshape((1,) + warp.shape),
+                            moving_img.numpy().reshape((1, *moving_img.shape, 1)),
+                            warp.reshape((1, *warp.shape)),
                         ]
                     ).squeeze()
 
@@ -250,8 +200,8 @@ def transform(args: TransformArgs) -> None:
                     transform = vxm.networks.Transform(moving_img.shape, nb_feats=1)
                     warped = transform.predict(
                         [
-                            moving_img.numpy().reshape((1,) + moving_img.shape + (1,)),
-                            warp.reshape((1,) + warp.shape),
+                            moving_img.numpy().reshape((1, *moving_img.shape, 1)),
+                            warp.reshape((1, *warp.shape)),
                         ]
                     ).squeeze()
 

@@ -4,7 +4,6 @@ Execute using the 'bifrost' executable installed by setuptools
 """
 
 import dataclasses
-import logging
 import os
 import shutil
 from pathlib import Path
@@ -17,9 +16,8 @@ import numpy as np
 from skimage.exposure import equalize_adapthist
 
 from bifrost.cli.bifrost import RegisterArgs
-from bifrost.io import guarded_ants_image_read, md5sum, read_weights_inshape, write_affine, write_image
-from bifrost.logging_utils import setup_cli_logger
-from bifrost.util import transpose_image, update_image_array
+from bifrost.io import guarded_ants_image_read, md5sum, write_affine, write_image
+from bifrost.util import setup_cli_file_logger, setup_cli_logger, transpose_image, update_image_array
 
 # hide GPUs
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -44,52 +42,27 @@ def register(args: RegisterArgs) -> None:
     #                              PATH LOGIC & VALIDATION                       #
     # ========================================================================== #
 
-    assert Path(args.moving).exists(), f"Moving image not found: {args.moving}"
+    assert args.moving.exists(), f"Moving image not found: {args.moving}"
 
-    results_dir = str(args.results_dir).rstrip("/")
+    # ========================================================================== #
+    #                      CONFIGURE LOGGER                                      #
+    # ========================================================================== #
+    if not args.log:
+        result_name = args.results_dir.name or "registration"
+        args.log = args.results_dir / f"{result_name}.log"
 
-    # Set up initial logger (without file handler yet)
-    logger = setup_cli_logger(__name__, verbose=args.verbose)
+    logger = setup_cli_logger(__name__, args.verbose, None)
+    logger.info("Storing results in %s", args.results_dir)
 
-    logger.info("Storing results in %s", results_dir)
-
-    if Path(results_dir).exists():
-        if args.force:
-            logger.info("Cleaning existing results directory")
-            shutil.rmtree(results_dir)
-            Path(results_dir).mkdir(parents=True)
-        else:
-            logger.warning("Results directory already exists. Run again with -f or --force to override")
-            return
-    else:
-        Path(results_dir).mkdir(parents=True)
-
-    # Now add file handler after directory exists
-    if args.log is None:
-        result_name = Path(args.results_dir).name or "registration"
-        log_path = Path(results_dir, f"{result_name}.log")
-    else:
-        log_path = str(args.log)
-
-    file_handler = logging.FileHandler(log_path)
-    file_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    logger.info("Writing full logs to %s", log_path)
+    if args.results_dir.exists() and not args.force:
+        logger.warning("Results directory already exists. Run again with -f or --force to override")
+        return
+    shutil.rmtree(args.results_dir, ignore_errors=True)
+    args.results_dir.mkdir(parents=True, exist_ok=True)
+    setup_cli_file_logger(logger, args.log)
 
     args.weights = Path(args.weights).resolve()
     logger.info("Using weights from %s", args.weights)
-    if not os.access(args.weights, os.F_OK | os.R_OK):
-        logger.error("Weights file %s is unreadable or does not exist.", args.weights)
-
-    weights_shape = read_weights_inshape(args.weights)
-    if weights_shape != TARGET_SHAPE:
-        logger.warning(
-            "Weights shape %s does not match default target shape %s. This may lead to unexpected results.",
-            weights_shape,
-            TARGET_SHAPE,
-        )
 
     # ========================================================================== #
     #                          INPUT VALIDATION                                  #
@@ -103,7 +76,7 @@ def register(args: RegisterArgs) -> None:
 
     import tensorflow as tf
 
-    with h5py.File(f"{results_dir}/transform.h5", "w") as h5_handle:
+    with h5py.File(f"{args.results_dir}/transform.h5", "w") as h5_handle:
         for k, v in dataclasses.asdict(args).items():
             if v is None:
                 continue
@@ -238,7 +211,7 @@ def register(args: RegisterArgs) -> None:
         # ========================================================================== #
         #                                  AFFINE                                    #
         # ========================================================================== #
-        registered_nii_path = Path(results_dir, "registered.nii")
+        registered_nii_path = Path(args.results_dir, "registered.nii")
         if args.skip_affine:
             full_res_moving = moving_img
         else:
@@ -248,7 +221,7 @@ def register(args: RegisterArgs) -> None:
                 moving_img,
                 type_of_transform="Affine",
                 verbose=args.verbose,
-                outprefix=f"{results_dir}/affine_iter_",
+                outprefix=f"{args.results_dir}/affine_iter_",
             )
 
             moving_img = affine["warpedmovout"]
@@ -316,7 +289,7 @@ def register(args: RegisterArgs) -> None:
                 moving_img,
                 type_of_transform="SyN",
                 verbose=args.verbose,
-                outprefix=f"{results_dir}/syn_iter_",
+                outprefix=f"{args.results_dir}/syn_iter_",
             )
 
             moving_img = syn["warpedmovout"]
@@ -368,10 +341,10 @@ def register(args: RegisterArgs) -> None:
 
             logger.info("Starting downsampled inference")
 
-            moving = moving_img.numpy().reshape((1,) + moving_img.shape + (1,))
+            moving = moving_img.numpy().reshape((1, *moving_img.shape, 1))
             logger.debug("Moving shape: %s", moving.shape)
 
-            fixed = fixed_img.numpy().reshape((1,) + fixed_img.shape + (1,))
+            fixed = fixed_img.numpy().reshape((1, *fixed_img.shape, 1))
             logger.debug("Fixed volfile shape: %s", fixed.shape)
 
             inshape = moving.shape[1:-1]
@@ -382,6 +355,12 @@ def register(args: RegisterArgs) -> None:
             with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 # load model
                 model = vxm.networks.VxmDense.load(args.weights)
+                if model.config.params.get("inshape", None) != TARGET_SHAPE:
+                    logger.warning(
+                        "Warning: model inshape %s does not match target shape %s",
+                        model.config.params.get("inshape", None),
+                        TARGET_SHAPE,
+                    )
 
                 logger.info("Running inference")
 
@@ -412,7 +391,7 @@ def register(args: RegisterArgs) -> None:
 
             full_res_moving = transpose_image(full_res_moving, optimal_transposition)
 
-            upsampled_warp = np.zeros(full_res_moving.shape + (3,))
+            upsampled_warp = np.zeros((*full_res_moving.shape, 3))
             logger.debug("Upsampled warp shape: %s", upsampled_warp.shape)
 
             for idx in range(3):
@@ -443,8 +422,8 @@ def register(args: RegisterArgs) -> None:
                 transform = vxm.networks.Transform(full_res_moving.shape, nb_feats=1)
                 warped = transform.predict(
                     [
-                        full_res_moving.numpy().reshape((1,) + full_res_moving.shape + (1,)),
-                        upsampled_warp.reshape((1,) + upsampled_warp.shape),
+                        full_res_moving.numpy().reshape((1, *full_res_moving.shape, 1)),
+                        upsampled_warp.reshape((1, *upsampled_warp.shape)),
                     ],
                 ).squeeze()
 

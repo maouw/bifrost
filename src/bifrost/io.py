@@ -1,7 +1,6 @@
 """Module for I/O related methods."""
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
@@ -142,8 +141,6 @@ def read_image(h5_handle: h5py.File, name: Pathable, directory: Pathable | None 
 
 def check_ants_header(filename: Pathable) -> dict[str, Any]:
     hdr = ants.core.ants_image_io.image_header_info(str(filename))
-    if not hdr:
-        raise ValueError(f"Image file {filename} does not have an ANTsImage header")
     if int(hdr.get("nComponents", 1)) > 1:
         raise ValueError("Multi-channel images not supported. Please plit into per-channel images.")
     return hdr
@@ -185,28 +182,25 @@ def md5sum(filename: Pathable, chunk_size: int = 8192) -> str:
     return file_hash.hexdigest()
 
 
-def read_weights_inshape(path: Pathable) -> tuple[int, int, int]:
-    """Reads the 'inshape' configuration from a model weights HDF5 file.
+def images_are_conformable(
+    image1: ants.ANTsImage, image2: ants.ANTsImage, shape: bool = True, spacing: bool = True, direction: bool = True
+) -> bool:
+    """Check if two ANTsImages are conformable (i.e., have the same shape and spacing).
 
     Args:
-        path: Path to the weights file.
+        image1: the first image
+        image2: the second image
+        shape: whether to check shape conformity
+        spacing: whether to check spacing conformity
+        direction: whether to check direction conformity
 
     Returns:
-        A tuple of three integers representing the input shape.
-
-    Raises:
-        KeyError: If the required 'model_config.config.inshape' attribute is missing.
-        ValueError: If the JSON cannot be decoded or the inshape cannot be converted to integers or is not a 3-tuple.
+        True if the images are conformable, False otherwise.
     """
-    with h5py.File(str(path), "r") as h5_handle:
-        try:
-            inshape_obj: list[int | float] = json.loads(str(h5_handle.attrs["model_config"]))["config"]["inshape"]
-        except KeyError as e:
-            raise KeyError("The weights file does not contain a 'model_config.config.inshape' attribute: {e}") from e
-        except (json.JSONDecodeError, TypeError) as e:
-            raise ValueError("Failed to decode 'model_config' JSON") from e
-        try:
-            inshape = np.asarray(inshape_obj).astype(dtype=int, casting="safe")
-        except ValueError as e:
-            raise ValueError("Failed to convert 'inshape' to integer type") from e
-        return tuple(inshape)
+    if shape and image1.shape != image2.shape:
+        return False
+    if spacing and image1.spacing != image2.spacing:
+        return False
+    if direction and not np.array_equal(image1.direction, image2.direction):  # noqa: SIM103
+        return False
+    return True

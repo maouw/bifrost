@@ -2,7 +2,9 @@
 
 import argparse
 import hashlib
+import logging
 import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -184,3 +186,98 @@ def find_images(
 
     _gather_files_at_depth(Path(directory), 0)
     return files
+
+
+def setup_cli_logger(
+    name: str,
+    verbose: bool = False,
+    log_path: Pathable = None,
+    default_log_name: Pathable = None,
+) -> logging.Logger:
+    """Set up logger for CLI commands with consistent configuration.
+
+    Creates a logger with both console (stdout/stderr) and file handlers.
+    Console output respects the verbose flag and BIFROST_LOG_LEVEL environment variable.
+
+    Args:
+        name: Logger name (typically __name__)
+        verbose: If True, show INFO level messages on stdout. If False, only show errors.
+        log_path: Explicit path to log file. Takes precedence over default_log_name.
+        default_log_name: Default log file name/path if log_path not specified.
+
+    Returns:
+        Configured logger instance
+
+    Raises:
+        SystemExit: If BIFROST_LOG_LEVEL environment variable contains invalid value
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)  # Default level, overridden by handlers
+
+    # stdout handler (info messages only, no warnings/errors)
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    stdout_handler.addFilter(lambda record: record.levelno < logging.WARNING)
+    logger.addHandler(stdout_handler)
+
+    # stderr handler (warnings and errors only)
+    error_handler = logging.StreamHandler(stream=sys.stderr)
+    error_handler.setLevel(logging.WARNING)
+    logger.addHandler(error_handler)
+
+    # Configure verbosity
+    if verbose:
+        stdout_handler.setLevel(logging.INFO)
+    else:
+        stdout_handler.setLevel(logging.CRITICAL + 1)  # Suppress all stdout
+
+    # Environment variable override for log level
+    if env_level := os.environ.get("BIFROST_LOG_LEVEL"):
+        logger.info("Overriding log level with BIFROST_LOG_LEVEL: %s", env_level)
+        try:
+            log_level = getattr(logging, env_level.upper())
+            logger.setLevel(log_level)
+            stdout_handler.setLevel(log_level)
+            error_handler.setLevel(log_level)
+        except AttributeError:
+            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", env_level)
+            sys.exit(1)
+
+    # File handler (if log path specified)
+    file_log_path = log_path or default_log_name
+    if file_log_path:
+        setup_cli_file_logger(logger, file_log_path)
+    return logger
+
+
+def setup_cli_file_logger(logger: logging.Logger, log_path: Pathable) -> None:
+    """Add file handler to existing logger instance."""
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.info("Writing full logs to %s", log_path)
+
+
+def images_are_conformable(
+    image1: ants.ANTsImage, image2: ants.ANTsImage, shape: bool = True, spacing: bool = True, direction: bool = True
+) -> bool:
+    """Check if two ANTsImages are conformable (i.e., have the same shape and spacing).
+
+    Args:
+        image1: the first image
+        image2: the second image
+        shape: whether to check shape conformity
+        spacing: whether to check spacing conformity
+        direction: whether to check direction conformity
+
+    Returns:
+        True if the images are conformable, False otherwise.
+    """
+    if shape and image1.shape != image2.shape:
+        return False
+    if spacing and image1.spacing != image2.spacing:
+        return False
+    if direction and not np.array_equal(image1.direction, image2.direction):  # noqa: SIM103
+        return False
+    return True
