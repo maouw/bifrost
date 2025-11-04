@@ -4,15 +4,19 @@ import argparse
 import hashlib
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 import ants
 import numpy as np
-import numpy.typing as npt
+from ants import ANTsImage
+from numpy import ndarray
+
+from bifrost.types import Pathable
 
 SYNTHMORPH_SHAPE = (160, 160, 192)
 
 
-def update_image_array(image: ants.ANTsImage, updated: ants.ANTsImage | npt.NDArray) -> ants.ANTsImage:
+def update_image_array(image: ANTsImage, updated: ANTsImage | ndarray) -> ANTsImage:
     """Update ANTsImage image array but preserve metadata.
 
     Args:
@@ -26,25 +30,24 @@ def update_image_array(image: ants.ANTsImage, updated: ants.ANTsImage | npt.NDAr
     # assert image.shape == updated.shape, f"Shape mismatch: {image.shape} != {updated.shape}. Ensure the updated array has the same shape as the original image."
     if not isinstance(updated, np.ndarray):
         updated = updated.numpy()
-    updated_image = image.new_image_like(updated)
-    return updated_image
+    return ants.new_image_like(image, updated)
 
 
-def threshold_image(image: ants.ANTsImage, threshold: float) -> ants.ANTsImage:
+def threshold_image(image: ANTsImage, threshold: float) -> ANTsImage:
     """Set intensity values below threshold to 0.
 
     Args:
-        image: ants.ANTsImage
+        image: ANTsImage
         threshold: float
 
     Returns:
-        thresholded_img: ants.ANTsImage
+        thresholded_img: ANTsImage
     """
     image_arr = image.numpy()
 
     image_arr[image_arr <= threshold] = 0.0
 
-    thresholded_image = ants.from_numpy(
+    return ants.from_numpy(
         image_arr,
         origin=image.origin,
         spacing=image.spacing,
@@ -52,10 +55,8 @@ def threshold_image(image: ants.ANTsImage, threshold: float) -> ants.ANTsImage:
         has_components=image.has_components,
     )
 
-    return thresholded_image
 
-
-def transpose_image(image: ants.ANTsImage, transposition: npt.NDArray) -> ants.ANTsImage:
+def transpose_image(image: ANTsImage, transposition: ndarray) -> ANTsImage:
     """Transpose the axes of an image, preserve metadata.
 
     Args:
@@ -75,7 +76,7 @@ def transpose_image(image: ants.ANTsImage, transposition: npt.NDArray) -> ants.A
 
     image_arr = np.transpose(image.numpy(), transposition)
 
-    transposed_image = ants.from_numpy(
+    return ants.from_numpy(
         image_arr,
         origin=_permute(image.origin),
         spacing=_permute(image.spacing),
@@ -83,11 +84,9 @@ def transpose_image(image: ants.ANTsImage, transposition: npt.NDArray) -> ants.A
         has_components=image.has_components,
     )
 
-    return transposed_image
 
-
-def dice_coefficient(image_1: npt.NDArray, image_2: npt.NDArray, exclude_labels: set[int] | Sequence[int] = (0,)):
-    """Computes the mean Sørensen–Dice coefficient across labels for two images.
+def dice_coefficient(image_1: ndarray, image_2: ndarray, exclude_labels: set[int] | Sequence[int] = (0,)):
+    """Computes the mean Sørensen-Dice coefficient across labels for two images.
 
     Also returns per label dice coefficients.
 
@@ -100,7 +99,9 @@ def dice_coefficient(image_1: npt.NDArray, image_2: npt.NDArray, exclude_labels:
         mean_coeff: float
         label_coeffs: map of label to dice coeff - dict
     """
-    assert image_1.shape == image_2.shape, f"Shape mismatch: {image_1.shape} != {image_2.shape}. Ensure both images have the same shape."
+    assert image_1.shape == image_2.shape, (
+        f"Shape mismatch: {image_1.shape} != {image_2.shape}. Ensure both images have the same shape."
+    )
 
     labels = np.unique(image_1)
     np.testing.assert_allclose(labels, np.unique(image_2))  # assert all(labels == np.unique(image_2))
@@ -149,3 +150,37 @@ def default_arg_from_env_var(env_var, value_name="default"):
     """
     v = os.environ.get(env_var)
     return {value_name: v} if v else {}
+
+
+def find_images(
+    directory: Pathable,
+    extensions: str | tuple[str, ...] = (".nii", ".nii.gz"),
+    max_depth: int = -1,
+) -> list[Pathable]:
+    """List files in a directory with given extensions, up to a maximum depth.
+
+    Args:
+        directory: path to the directory
+        extensions: file extension or list of file extensions to include. Empty string for all files.
+        max_depth: maximum depth to search for files. 0 for only top-level, None for unlimited depth.
+
+    Returns:
+        List of Paths to files with the given extensions.
+    """
+    extensions = (extensions,) if isinstance(extensions, str) else tuple(extensions)
+    files = []
+
+    def _gather_files_at_depth(current_path: Path, current_depth: int):
+        # Base case: if current depth exceeds max depth, return
+        if max_depth < 0:  # unlimited depth
+            pass
+        elif current_depth > max_depth:  # exceeded max depth
+            return
+        for item in current_path.iterdir():
+            if item.is_file() and item.name.endswith(extensions):
+                files.append(item)
+            elif item.is_dir():
+                _gather_files_at_depth(item, current_depth + 1)
+
+    _gather_files_at_depth(Path(directory), 0)
+    return files

@@ -7,12 +7,14 @@ import logging
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 import ants
 import h5py
 import numpy as np
 from skimage.exposure import equalize_adapthist
 
+from bifrost.cli.bifrost import TransformArgs
 from bifrost.io import guarded_ants_image_read, md5sum, read_affine, read_image
 from bifrost.util import transpose_image, update_image_array
 
@@ -23,7 +25,7 @@ from bifrost.util import transpose_image, update_image_array
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0 = all, 1 = info, 2 = warning, 3 = error
 
 
-def transform(args):
+def transform(args: TransformArgs) -> None:
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -63,7 +65,7 @@ def transform(args):
     # ========================================================================== #
 
     if args.log is None:
-        log_name = f"{os.path.basename(args.image_path).split('.')[0]}_apply_transform.log"
+        log_name = f"{Path(args.image_path).name.split('.')[0]}_apply_transform.log"
         log_path = f"{args.alignment_path}/{log_name}"
     else:
         log_path = args.log
@@ -84,10 +86,13 @@ def transform(args):
 
     logger.debug("Parsed args: %s", args)
 
-    assert "transform.h5" in os.listdir(args.alignment_path)
+    assert Path(args.alignment_path, "transform.h5").exists(), (
+        f"Transform file does not exist: {Path(args.alignment_path, 'transform.h5')}"
+    )
 
-    import tensorflow as tf  # noqa: PLC0415 I001
-    import voxelmorph as vxm  # noqa: PLC0415 I001
+    import tensorflow as tf
+    import voxelmorph as vxm
+    import voxelmorph.tf.networks
 
     logger.info("Loading moving image: %s", args.image_path)
     moving_img = guarded_ants_image_read(args.image_path)
@@ -103,10 +108,7 @@ def transform(args):
             has_components=h5_handle.attrs["fixed.has_components"],
         )
 
-        if args.label_image:
-            resample_method = 1
-        else:
-            resample_method = 3
+        resample_method = 1 if args.label_image else 3
 
         lobe_mask = None
 
@@ -117,14 +119,18 @@ def transform(args):
         if h5_handle.attrs["args.downsample_to"] > 0:
             desired_spacing = (h5_handle.attrs["args.downsample_to"],) * 3
 
-            logger.info(f"Resampling image. Current resolution: {moving_img.spacing}, Desired resolution: {desired_spacing}")
+            logger.info(
+                f"Resampling image. Current resolution: {moving_img.spacing}, Desired resolution: {desired_spacing}",
+            )
 
             moving_img = ants.resample_image(moving_img, desired_spacing, interp_type=resample_method)
 
             fixed_img = ants.resample_image(fixed_img, desired_spacing, interp_type=resample_method)
 
-            if lobe_mask is not None:
-                logger.info(f"Resampling mask. Current resolution: {lobe_mask.spacing}, Desired resolution: {desired_spacing}")
+            if isinstance(lobe_mask, ants.ANTsImage):
+                logger.info(
+                    f"Resampling mask. Current resolution: {lobe_mask.spacing}, Desired resolution: {desired_spacing}",
+                )
 
                 lobe_mask = ants.resample_image(lobe_mask, desired_spacing, interp_type=1)
 
@@ -142,41 +148,37 @@ def transform(args):
         #                          HISTOGRAM EQUALIZATION                            #
         # ========================================================================== #
 
-        if args.apply_preprocessing and not args.label_image:
-            if h5_handle.attrs["args.moving_clip_limit"] > 0:
-                logger.info(
-                    "Running moving CLAHE. Clip limit: %s",
-                    h5_handle.attrs["args.moving_clip_limit"],
-                )
+        if args.apply_preprocessing and not args.label_image and h5_handle.attrs["args.moving_clip_limit"] > 0:
+            logger.info(
+                "Running moving CLAHE. Clip limit: %s",
+                h5_handle.attrs["args.moving_clip_limit"],
+            )
 
-                moving_clahe = equalize_adapthist(
-                    moving_img.numpy(),
-                    # get won't throw a key error if args.clahe_kernel_size doesn't exist (it might not)
-                    kernel_size=h5_handle.attrs.get("args.clahe_kernel_size"),
-                    clip_limit=h5_handle.attrs["args.moving_clip_limit"],
-                )
+            moving_clahe = equalize_adapthist(
+                moving_img.numpy(),
+                # get won't throw a key error if args.clahe_kernel_size doesn't exist (it might not)
+                kernel_size=h5_handle.attrs.get("args.clahe_kernel_size"),
+                clip_limit=h5_handle.attrs["args.moving_clip_limit"],
+            )
 
-                moving_img = update_image_array(moving_img, moving_clahe)
+            moving_img = update_image_array(moving_img, moving_clahe)
 
         # ========================================================================== #
         #                                  AFFINE                                    #
         # ========================================================================== #
 
-        if args.label_image:
-            interpolator = "nearestNeighbor"
-        else:
-            interpolator = "linear"
+        interpolator = "nearestNeighbor" if args.label_image else "linear"
 
         if "affine" in h5_handle:
             logger.info("Apply affine transform")
 
             with tempfile.TemporaryDirectory() as tmp_dir:
                 affine_path = read_affine(h5_handle, "/affine", directory=tmp_dir)
-
+                assert isinstance(moving_img, ants.ANTsImage)
                 moving_img = ants.apply_transforms(
                     fixed_img,
                     moving_img,
-                    transformlist=[affine_path],
+                    transformlist=[str(affine_path)],
                     interpolator=interpolator,
                 )
 
@@ -184,7 +186,7 @@ def transform(args):
                     lobe_mask = ants.apply_transforms(
                         fixed_img,
                         lobe_mask,
-                        transformlist=[affine_path],
+                        transformlist=[str(affine_path)],
                         interpolator=interpolator,
                     )
 
@@ -194,9 +196,9 @@ def transform(args):
 
         if "syn" in h5_handle:
             with tempfile.TemporaryDirectory() as tmp_dir:
-                affine_path = read_affine(h5_handle, "/syn/affine", directory=tmp_dir)
+                affine_path = str(read_affine(h5_handle, "/syn/affine", directory=tmp_dir))
 
-                syn_path = read_image(h5_handle, "/syn/forward_warp", directory=tmp_dir)
+                syn_path = str(read_image(h5_handle, "/syn/forward_warp", directory=tmp_dir))
 
                 logger.info("Apply SyN transforms")
 
@@ -223,6 +225,7 @@ def transform(args):
             warp = h5_handle["/synthmorph"][:]
 
             logger.info("Transposing image")
+            assert isinstance(moving_img, ants.ANTsImage)
 
             optimal_transposition = np.argsort(moving_img.shape)
             inverse_transposition = np.argsort(optimal_transposition)
@@ -252,8 +255,9 @@ def transform(args):
                         ]
                     ).squeeze()
 
-            if lobe_mask is not None:
+            if isinstance(lobe_mask, ants.ANTsImage):
                 lobe_mask = transpose_image(lobe_mask, optimal_transposition).numpy() > 0
+                assert isinstance(lobe_mask, bool)
                 warped[lobe_mask] = moving_img[lobe_mask]
 
             moving_img = np.transpose(warped, inverse_transposition)
@@ -262,19 +266,20 @@ def transform(args):
         #                              WRITE IMAGE                                   #
         # ========================================================================== #
 
-        logger.info("Result name: %s", args.result_name)
+        # Result path resolution
+        logger.info(f"Result name:{args.result_name}")
         if args.result_name is None:
-            result_name = f"{os.path.basename(args.image_path).split('.')[0]}_transformed.nii"
-            result_path = f"{args.alignment_path}/{result_name}"
-        # interpreted as absolute path
-        elif args.result_name.startswith("/") or args.result_name.startswith("./"):
-            os.makedirs(os.path.dirname(args.result_name), exist_ok=True)
-            result_path = args.result_name
-        # interpreted as just a name
+            result_path = Path(args.alignment_path, args.image_path.stem + "_transformed.nii")
+        elif args.result_name.startswith(("/", "./")):
+            result_path = Path(args.result_name)
+            result_path.parent.mkdir(parents=True, exist_ok=True)
         else:
-            result_path = f"{args.alignment_path}/{args.result_name}"
+            result_path = Path(args.alignment_path, args.result_name)
 
+        # Ensure ANTsImage before write
         if not isinstance(moving_img, ants.ANTsImage):
+            assert isinstance(moving_img, np.ndarray)
+            assert isinstance(fixed_img, ants.ANTsImage)
             moving_img = ants.from_numpy(
                 moving_img,
                 origin=fixed_img.origin,
@@ -283,6 +288,5 @@ def transform(args):
                 has_components=fixed_img.has_components,
             )
 
-        ants.image_write(moving_img, result_path)
-
+        ants.image_write(moving_img, str(result_path))
         logger.info(f"Wrote transformed image to {result_path}")

@@ -3,10 +3,10 @@
 Execute using the 'bifrost' executable installed by setuptools
 """
 
+import dataclasses
 import logging
 import os
 import shutil
-import sys
 from pathlib import Path
 
 import ants
@@ -16,7 +16,9 @@ import numpy as np
 # import tensorflow as tf
 from skimage.exposure import equalize_adapthist
 
+from bifrost.cli.bifrost import RegisterArgs
 from bifrost.io import guarded_ants_image_read, md5sum, read_weights_inshape, write_affine, write_image
+from bifrost.logging_utils import setup_cli_logger
 from bifrost.util import transpose_image, update_image_array
 
 # hide GPUs
@@ -29,70 +31,65 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "1")  # 0 = all, 1 = info, 2 = war
 TARGET_SHAPE = (160, 160, 192)
 
 
-def register(args):
+def register(args: RegisterArgs) -> None:
+    """Execute the full registration pipeline from moving to fixed image.
+
+    Applies preprocessing, affine alignment, SyN pre-registration, and SynthMorph
+    deep learning registration. All transforms are saved to transform.h5 for later use.
+
+    Args:
+        args: Registration arguments including image paths, preprocessing options, and output settings
+    """
     # ========================================================================== #
-    #                      PARSE ARGS, CONFIGURE LOGGER                          #
-    # ========================================================================== #
-
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-
-    stdout_handler = logging.StreamHandler(stream=sys.stdout)
-    # don't log errors, those get sent to stderr
-    stdout_handler.addFilter(lambda x: x.levelno < logging.WARNING)
-    logger.addHandler(stdout_handler)
-
-    error_handler = logging.StreamHandler(stream=sys.stderr)
-    error_handler.setLevel(logging.WARNING)
-    logger.addHandler(error_handler)
-
-    # ========================================================================== #
-    #                        CONFIGURE LOGGING VERBOSITY                         #
+    #                              PATH LOGIC & VALIDATION                       #
     # ========================================================================== #
 
-    if args.verbose:
-        stdout_handler.setLevel(logging.INFO)
-    else:
-        stdout_handler.setLevel(logging.CRITICAL + 1)
+    assert Path(args.moving).exists(), f"Moving image not found: {args.moving}"
 
-    if os.environ.get("BIFROST_LOG_LEVEL") is not None:
-        try:
-            log_level = getattr(logging, os.environ["BIFROST_LOG_LEVEL"].upper())
-            logger.setLevel(log_level)
-            stdout_handler.setLevel(log_level)
-            error_handler.setLevel(log_level)
-        except AttributeError:
-            logger.error("Invalid log level specified in BIFROST_LOG_LEVEL: %s", os.environ["BIFROST_LOG_LEVEL"])
-            sys.exit(1)
+    results_dir = str(args.results_dir).rstrip("/")
 
-    # ========================================================================== #
-    #                              PATH LOGIC                                    #
-    # ========================================================================== #
+    # Set up initial logger (without file handler yet)
+    logger = setup_cli_logger(__name__, verbose=args.verbose)
 
-    assert os.path.exists(args.moving)
-
-    results_dir = args.results_dir.rstrip("/")
     logger.info("Storing results in %s", results_dir)
 
-    if os.path.exists(results_dir):
+    if Path(results_dir).exists():
         if args.force:
             logger.info("Cleaning existing results directory")
             shutil.rmtree(results_dir)
-            os.makedirs(results_dir)
+            Path(results_dir).mkdir(parents=True)
         else:
             logger.warning("Results directory already exists. Run again with -f or --force to override")
             return
     else:
-        os.makedirs(results_dir)
+        Path(results_dir).mkdir(parents=True)
 
-    args.weights = str(Path(args.weights).expanduser())
+    # Now add file handler after directory exists
+    if args.log is None:
+        result_name = Path(args.results_dir).name or "registration"
+        log_path = Path(results_dir, f"{result_name}.log")
+    else:
+        log_path = str(args.log)
+
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.info("Writing full logs to %s", log_path)
+
+    args.weights = Path(args.weights).resolve()
     logger.info("Using weights from %s", args.weights)
     if not os.access(args.weights, os.F_OK | os.R_OK):
         logger.error("Weights file %s is unreadable or does not exist.", args.weights)
 
     weights_shape = read_weights_inshape(args.weights)
     if weights_shape != TARGET_SHAPE:
-        logger.warning("Weights shape %s does not match default target shape %s. This may lead to unexpected results.", weights_shape, TARGET_SHAPE)
+        logger.warning(
+            "Weights shape %s does not match default target shape %s. This may lead to unexpected results.",
+            weights_shape,
+            TARGET_SHAPE,
+        )
 
     # ========================================================================== #
     #                          INPUT VALIDATION                                  #
@@ -102,34 +99,15 @@ def register(args):
         logger.warning("All registration steps skipped. Run again with a registration step enabled")
         return
 
-    # ========================================================================== #
-    #                      CONFIGURE LOG FILE HANDLER                            #
-    # ========================================================================== #
-
-    if args.log is None:
-        result_name = args.results_dir.rstrip("/").split("/")[-1].split(".")[0]
-        log_path = f"{results_dir}/{result_name}.log"
-    else:
-        log_path = args.log
-
-    logger.info("Writing full logs to %s", log_path)
-
-    file_handler = logging.FileHandler(log_path)
-    file_handler.setLevel(logging.INFO)
-
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    file_handler.setFormatter(formatter)
-
-    logger.addHandler(file_handler)
-
     logger.debug("Parsed args: %s", args)
 
-    import tensorflow as tf  # noqa: PLC0415 I001
+    import tensorflow as tf
 
     with h5py.File(f"{results_dir}/transform.h5", "w") as h5_handle:
-        for arg_name, arg_val in vars(args).items():
-            if arg_name != "func" and arg_val is not None:
-                h5_handle.attrs[f"args.{arg_name}"] = arg_val
+        for k, v in dataclasses.asdict(args).items():
+            if v is None:
+                continue
+            h5_handle.attrs[f"args.{k}"] = str(v) if isinstance(v, Path) else v
 
         # ========================================================================== #
         #                               LOAD IMAGES                                  #
@@ -173,7 +151,9 @@ def register(args):
                 )
                 and args.downsample_to > 0
             ):
-                logger.warning("Discrepancy between SynthMorph mask metadata and moving image metadata prior to resampling.")
+                logger.warning(
+                    "Discrepancy between SynthMorph mask metadata and moving image metadata prior to resampling."
+                )
 
             if args.downsample_to > 0:
                 desired_spacing = (args.downsample_to,) * 3
@@ -263,14 +243,23 @@ def register(args):
             full_res_moving = moving_img
         else:
             logger.info("Running affine alignment")
-            affine = ants.registration(fixed_img, moving_img, type_of_transform="Affine", verbose=args.verbose, outprefix=f"{results_dir}/affine_iter_")
+            affine = ants.registration(
+                fixed_img,
+                moving_img,
+                type_of_transform="Affine",
+                verbose=args.verbose,
+                outprefix=f"{results_dir}/affine_iter_",
+            )
 
             moving_img = affine["warpedmovout"]
             full_res_moving = moving_img
 
             if args.synthmorph_mask is not None:
+                assert synthmorph_mask is not None
                 logger.info("Applying affine transform to SynthMorph mask")
-                synthmorph_mask = ants.apply_transforms(fixed_img, synthmorph_mask, transformlist=affine["fwdtransforms"])
+                synthmorph_mask = ants.apply_transforms(
+                    fixed_img, synthmorph_mask, transformlist=affine["fwdtransforms"]
+                )
 
             # NOTE: for some inexplicable reason ants returns identical files
             # for forward and reverse transforms, so we need only store one
@@ -322,7 +311,13 @@ def register(args):
 
         if not args.skip_syn:
             logger.info("Running SyN pre-registration")
-            syn = ants.registration(fixed_img, moving_img, type_of_transform="SyN", verbose=args.verbose, outprefix=f"{results_dir}/syn_iter_")
+            syn = ants.registration(
+                fixed_img,
+                moving_img,
+                type_of_transform="SyN",
+                verbose=args.verbose,
+                outprefix=f"{results_dir}/syn_iter_",
+            )
 
             moving_img = syn["warpedmovout"]
             full_res_moving = moving_img
@@ -382,7 +377,7 @@ def register(args):
             inshape = moving.shape[1:-1]
             nb_feats = moving.shape[-1]
 
-            import voxelmorph as vxm  # noqa: PLC0415 I001
+            import voxelmorph as vxm
 
             with tf.device(os.environ.get("BIFROST_TF_DEVICE", "")):
                 # load model
@@ -396,8 +391,11 @@ def register(args):
                 # symmetrize warp
                 if args.mirror_warp:
                     flipped_warp = np.flip(warp, int(mirror_axis) + 1)  # np.flip(warp, mirror_axis + 1)
-                    mirrored_warp = np.mean([warp, flipped_warp], axis=0)
-                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean([warp, -flipped_warp], axis=0)[:, :, :, :, mirror_axis]
+                    mirrored_warp = np.mean(np.array([warp, flipped_warp]), axis=0)
+
+                    mirrored_warp[:, :, :, :, mirror_axis] = np.mean(np.array([warp, -flipped_warp]), axis=0)[
+                        :, :, :, :, mirror_axis
+                    ]
                     warp = mirrored_warp
 
                 moved = vxm.networks.Transform(inshape, nb_feats=nb_feats).predict([moving, warp])
@@ -447,11 +445,11 @@ def register(args):
                     [
                         full_res_moving.numpy().reshape((1,) + full_res_moving.shape + (1,)),
                         upsampled_warp.reshape((1,) + upsampled_warp.shape),
-                    ]
+                    ],
                 ).squeeze()
 
             if args.synthmorph_mask is not None:
-                assert synthmorph_mask is not None, "SynthMorph mask should be defined if SynthMorph is enabled"
+                assert isinstance(synthmorph_mask, ants.ANTsImage)
                 synthmorph_mask = transpose_image(synthmorph_mask, optimal_transposition).numpy() > 0
                 warped[synthmorph_mask] = full_res_moving[synthmorph_mask]
 

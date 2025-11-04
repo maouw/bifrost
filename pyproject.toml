@@ -1,155 +1,201 @@
 [build-system]
 build-backend = "uv_build"
 requires = [
-    "uv-build>=0.9.5,<0.10",
-]
-
-[dependency-groups]
-dev = [
-    "ipython>=9",
-    "mypy>=1.18",
-    "pre-commit>=4.3",
-    "pytest-xdist[psutil]>=3.8",
-    "pytest>=8.4",
-    "ruff>=0.14",
-    "snakefmt>=0.11",
-    "wat>=0.7",
+  "uv-build>=0.9.5,<0.10",
 ]
 
 [project]
+name = "bifrost"
+version = "0.1.2-alpha"
+description = "Template building and cross-modal registration."
+readme = "README.md"
+license.file = "LICENSE.md"
 authors = [
-    { email = "a5b@stanford.edu", name = "Andrew Berger" },
-    { email = "altan@uw.edu", name = "Altan Orhon" },
+  { email = "a5b@stanford.edu", name = "Andrew Berger" },
+  { email = "altan@uw.edu", name = "Altan Orhon" },
 ]
+requires-python = ">=3.11,<3.13"
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "antspyx>=0.6.1",
-    "h5py>=3",
-    "loguru>=0.7",
-    "numpy>1.20",
-    "scikit-image>=0.22",
-    "scikit-learn>=1",
-    "scipy>=1.10",
-    "snakemake>=9",
-    "tenacity>=9",
-    "tensorflow-cpu>=2.15; extra != 'cuda' and extra != 'metal'",
-    "tensorflow>=2.15; extra == 'cuda' or extra == 'metal'",
-    "tf-keras>=2.15",
-    "tyro>=0.9",
-    "voxelmorph>=0.2",
+  "antspyx>=0.6.1",
+  "h5py>=3.7",
+  "numpy>1.24,<3",
+  "scikit-image>=0.22",
+  "scikit-learn>=1",
+  "scipy>=1.10",
+  "snakemake>=8",
+  "tenacity>=9.1.2",
+  "tensorflow>=2.15.1",
+  "tf-keras>=2.15.1",
+  "voxelmorph>=0.2",
 ]
-description = "Template building and cross-modal registration."
-name = "bifrost"
-readme = "README.md"
-requires-python = ">=3.11,<3.13"
-version = "0.1.2-alpha"
-
-[project.license]
-file = "LICENSE.md"
-
-[project.optional-dependencies]
-cuda = [
-    "tensorflow[and-cuda]; platform_machine=='x86_64' and sys_platform=='linux'",
+optional-dependencies.cuda = [
+  "tensorflow[and-cuda]>=2.15.1; platform_machine=='x86_64' and sys_platform=='linux'",
 ]
-intelcpu = [
-    "intel-extension-for-tensorflow[cpu]; platform_machine=='x86_64' and sys_platform=='linux' and python_version=='3.11'",
-    "numpy<2.0; platform_machine=='x86_64' and sys_platform=='linux' and python_version=='3.11'",
+# optional-dependencies.intelcpu = [
+#   "intel-extension-for-tensorflow[cpu]; platform_machine=='x86_64' and sys_platform=='linux' and python_version=='3.11'",
+#   "numpy>=1.24,<2; platform_machine=='x86_64' and sys_platform=='linux' and python_version=='3.11'",
+#   "tensorflow>=2.15.1,<2.16; platform_machine=='x86_64' and sys_platform=='linux' and python_version=='3.11'",
+# ]
+optional-dependencies.metal = [
+  "tensorflow>=2.18; platform_machine=='arm64' and sys_platform=='darwin'",
+  "tensorflow-metal>=1.2; platform_machine=='arm64' and sys_platform=='darwin'",
 ]
-metal = [
-    "tensorflow-metal; platform_machine=='arm64' and sys_platform=='darwin'",
+optional-dependencies.slurm = [
+  "snakemake-executor-plugin-slurm>=1.9.2",
 ]
-
-[project.scripts]
-bifrost = "bifrost.cli.bifrost:main"
-
-[project.urls]
-Homepage = "https://github.com/ClandininLab/bifrost"
-"Source Code" = "https://github.com/maouw/bifrost"
-
-[tool.mypy]
-mypy_path = [
-    "typings",
+optional-dependencies.test = [
+  "pytest>=8.4",
+  "pytest-xdist[psutil]>=3.8",
 ]
-python_version = 3.11
-strict = true
+urls.Homepage = "https://github.com/ClandininLab/bifrost"
+urls."Source Code" = "https://github.com/maouw/bifrost"
+scripts.bifrost = "bifrost.cli.bifrost:main"
 
-[tool.ruff]
-exclude = [
-    ".stubs",
-    "typings",
-]
-indent-width = 4
-line-length = 160
-target-version = "py311"
-
-[tool.ruff.format]
-docstring-code-format = true
-docstring-code-line-length = 180
-indent-style = "space"
-line-ending = "lf"
-
-[tool.ruff.lint]
-ignore = [
-    "PLR0913",
-    "UP045",
-]
-select = [
-    "B",
-    "D",
-    "E",
-    "F",
-    "I",
-    "PL",
-    "Q",
-    "UP",
-]
-
-[tool.ruff.lint.per-file-ignores]
-"docs/*" = [
-    "D",
-]
-"tests/*" = [
-    "D",
-]
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-
-[tool.ruff.lint.pylint]
-allow-magic-value-types = [
-    "int",
-    "str",
+[dependency-groups]
+dev = [
+  "basedpyright>=1.32.1",
+  "ipython>=9",
+  "mypy>=1.18",
+  "pre-commit>=4.3",
+  "ruff>=0.14",
+  "scipy-stubs>=1.16.3",
+  "simpleitk>=2.5.2",
+  "snakefmt>=0.11",
+  "ty>=0.0.1a24",
+  "types-tensorflow>=2.18.0.20251008",
+  "wat>=0.7",
 ]
 
 [tool.uv]
 conflicts = [
-    [
-        { extra = "cuda" },
-        { extra = "metal" },
-    ],
-    [
-        { extra = "intelcpu" },
-        { extra = "metal" },
-    ],
+  [ { extra = "cuda" }, { extra = "metal" } ],
+  [ { extra = "intelcpu" }, { extra = "metal" } ],
 ]
-override-dependencies = [
-    "wrapt>=1.15.0,<2.0; sys_platform=='linux'",
-]
+# override-dependencies = [
+#   "wrapt>=1.15,<2.0; extra=='intelcpu'"
+# ]
 
 [[tool.uv.dependency-metadata]]
 name = "voxelmorph"
 requires-dist = [
-    "neurite@ git+https://github.com/adalca/neurite.git@682f828b7b5fa652d7205c894c7fe667f1a26251",
-    "pystrum@ git+https://github.com/adalca/pystrum.git@d83bd99ce25e3c79789f6891c174c39ec7f5209b",
+  "neurite@ git+https://github.com/adalca/neurite.git@682f828b7b5fa652d7205c894c7fe667f1a26251",
+  "pystrum@ git+https://github.com/adalca/pystrum.git@d83bd99ce25e3c79789f6891c174c39ec7f5209b",
 ]
 version = "0.2"
 
 [tool.uv.sources.voxelmorph]
 git = "https://github.com/voxelmorph/voxelmorph.git"
 rev = "53d1b95fa734648c92fd8af4f3807b09cb56c342"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+include = ["pyproject.toml", "src/**/*.py", "scripts/**/*.py", "tests/**/*.py"]
+extend-exclude = [
+  ".stubs",
+  "_typings",
+]
+format.docstring-code-format = true
+
+# Enforce general Python style and static checks
+lint.select = [
+  "A",   # flake8-builtins (shadowing built-ins)
+  "B",   # flake8-bugbear (common pitfalls)
+  "C4",  # flake8-comprehensions
+#  "COM", # flake8-commas
+  "E",   # pycodestyle (PEP8 errors)
+  "F",   # pyflakes (undefined names, unused imports, etc.)
+  "I",   # isort (import sorting)
+  "RUF", # Ruff-specific rules
+  "SIM", # flake8-simplify
+  "TID", # flake8-tidy-imports
+  "UP",  # pyupgrade (modern syntax)
+]
+# Optionally add more safety and consistency checks:
+lint.extend-select = [
+  "ARG", # flake8-unused-arguments
+  "D",   # Docstrings
+  "PL",  # pylint (safe subset)
+  "PTH", # flake8-use-pathlib
+  "Q",   # Quotes,
+
+  "RET", # flake8-return
+  "T10", # flake8-debugger (no print/pdb)
+]
+# Ignore overly strict or low-value rules
+lint.ignore = [
+  "B905",    # zip(strict=True) not always desired
+  "E501",    # line length (let Black handle it)
+  "PLC0415",
+  "PLR0913",
+  "SIM118",  # avoid suggesting reorganization that hurts clarity,
+  "UP045",
+  "D100",  # docstring rules (too verbose)
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D106",
+  "D107",
+  "D101",
+  "PTH123",
+]
+lint.extend-per-file-ignores = { "docs/*" = [ "D" ], "tests/*" = [ "D" ] }
+lint.pydocstyle.convention = "google"
+lint.pylint.allow-magic-value-types = [ "int", "str" ]
+
+[tool.mypy]
+mypy_path = [
+  ".stubs",
+]
+python_version = "3.11"
+#strict = true
+#strict_bytes = true
+local_partial_types = true
+# Unreachable blocks have been an issue when compiling mypyc, let's try to avoid 'em in the first place
+warn_unreachable = true
+implicit_reexport = true
+show_error_codes = true
+show_column_numbers = true
+#check_untyped_defs = true
+
+# [[tool.mypy.overrides]]
+# module = [
+#   "ants.*",
+#   "snakemake",
+#   "snakemake.*",
+#   "voxelmorph.*",
+#   "neurite"
+# ]
+# ignore_errors = true
+
+
+[tool.basedpyright]
+include = ["src"]
+exclude = ["**/node_modules",
+    "**/__pycache__",
+    "src/experimental",
+    "src/typestubs"
+]
+ignore = ["src/oldstuff"]
+stubPath = ".stubs"
+pythonVersion = "3.11"
+typeCheckingMode = "recommended"
+
+[tool.pyrefly]
+search-path = [".stubs"]
+python-version = "3.11.0"
+# set the directory Pyrefly will search for files to type check
+project-includes = [
+    "src"
+]
+ignore-missing-source = true
+
+

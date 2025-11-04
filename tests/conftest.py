@@ -21,7 +21,13 @@ def sample_3d_image() -> ants.ANTsImage:
     mask = ((x - center[1]) ** 2 + (y - center[0]) ** 2 + (z - center[2]) ** 2) < (min(shape) // 3) ** 2
     data[mask] = data[mask] * 2  # Brighter center
 
-    image = ants.from_numpy(data, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), direction=np.diag((-1.0, -1.0, 1.0)), has_components=False)
+    image = ants.from_numpy(
+        data,
+        origin=(0.0, 0.0, 0.0),
+        spacing=(1.0, 1.0, 1.0),
+        direction=np.diag((-1.0, -1.0, 1.0)),
+        has_components=False,
+    )
     return image
 
 

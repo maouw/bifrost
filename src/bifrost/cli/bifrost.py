@@ -5,10 +5,105 @@ Execute using the 'bifrost' executable installed by setuptools
 
 import argparse
 import os
-import sys
 import shlex
+import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
 from bifrost.util import SubcommandHelpFormatter, default_arg_from_env_var
+
+
+@dataclass
+class RegisterArgs:
+    """Command line args for register."""
+
+    moving: Path
+    """Absolute path to moving image."""
+    fixed: Path
+    """Absolute path to fixed image."""
+    results_dir: Path
+    """Absolute path to write results."""
+    weights: Path
+    """Absolute path to model weights."""
+    clahe_kernel_size: int | None = None
+    """Kernel size for contrast-limited adaptive histogram equalization."""
+    fixed_clip_limit: float = -1.0
+    """Clip limit for fixed image CLAHE."""
+    moving_clip_limit: float = 0.03
+    """Clip limit for moving image CLAHE."""
+    skip_syn: bool = False
+    """Skip symmetric normalization pre-registration."""
+    skip_affine: bool = False
+    """Skip affine, images must be pre-aligned."""
+    skip_synthmorph: bool = False
+    """Skip synthmorph inference."""
+    downsample_to: float = -1
+    """Isotropic resolution to downsample full-res to, before doing anything."""
+    synthmorph_mask: Path | None = None
+    """Path to SynthMorph warp mask, of same shape as moving."""
+    mirror_warp: bool = False
+    """Mirror warp. Axis selected automatically based on similarity."""
+    keep_intermediates: bool = False
+    """Keep intermediate results."""
+    force: bool = False
+    """Force override of results directory, if it already exists."""
+    log: Path | None = None
+    """Desired log file."""
+    verbose: bool = False
+    """Print info to stdout."""
+
+
+@dataclass
+class BuildTemplateArgs:
+    """Command line args for build_template."""
+
+    input: list[Path]
+    """Absolute path(s) to structural images or directorie(s) containing them."""
+    output: Path
+    """Absolute path to output directory, created."""
+    reference_image: Path | None = None
+    """Absolute path to reference image used as fixed for the first alignment step."""
+    affine_steps: int = 1
+    """Number of affine alignment steps."""
+    syn_steps: int = 3
+    """Number of SyN alignment steps."""
+    gradient_step: float = 0.1
+    """Shape update gradient step size."""
+    preprocessing: tuple[str, ...] = ()
+    """Preprocessing steps to perform. Insensitive to argument order."""
+    force: bool = False
+    """Force override of output directory, if it already exists."""
+    preemptible: bool = False
+    """Don't clean results directory and resume existing work. Useful when running on a preemptible node."""
+    mirror: bool = False
+    """Mirror input images across the x axis."""
+    keep_intermediates: bool = False
+    """Keep intermediate results. By default only the final template is retained."""
+    log: Path | None = None
+    """Desired log file. By default logs are written to output directory."""
+    verbose: bool = False
+    """Print info to stdout. By default, only errors are emitted."""
+
+
+@dataclass
+class TransformArgs:
+    """Command line args for transform."""
+
+    alignment_path: Path
+    "Absolute path to BIFROST registration RESULTS_DIR."
+    image_path: Path
+    "Absolute path to image to transform."
+    label_image: bool = False
+    "Set if image is a label image (ROIs). Uses interpolation methods that preserve labels."
+    apply_preprocessing: bool = False
+    "Set this to exactly reproduce the net result of the original registration."
+    result_name: str | None = None
+    "Overrides default result name if specified."
+    log: Path | None = None
+    "Desired log file."
+    verbose: bool = False
+    "Print info to stdout."
 
 
 def main(args: Sequence[str] | None = None):
@@ -48,19 +143,21 @@ def main(args: Sequence[str] | None = None):
     # ======================================= #
 
     moving_help = "Absolute path to moving image"
-    parser_register.add_argument("moving", help=moving_help)
+    parser_register.add_argument("moving", help=moving_help, type=Path)
 
     fixed_help = "Absolute path to fixed image"
-    parser_register.add_argument("fixed", help=fixed_help)
+    parser_register.add_argument("fixed", help=fixed_help, type=Path)
 
     results_dir_help = "Absolute path to write results"
-    parser_register.add_argument("results_dir", help=results_dir_help)
+    parser_register.add_argument("results_dir", help=results_dir_help, type=Path)
 
     weights_help = "Path to SynthMorph weights file"
     BIFROST_WEIGHTS_PATH = os.environ.get("BIFROST_WEIGHTS_PATH", None)
     if BIFROST_WEIGHTS_PATH:
         weights_help += f" [default: {shlex.quote(BIFROST_WEIGHTS_PATH)}]"
-    parser_register.add_argument("--weights", **default_arg_from_env_var("BIFROST_WEIGHTS_PATH"), required=True, help=weights_help)
+    parser_register.add_argument(
+        "--weights", **default_arg_from_env_var("BIFROST_WEIGHTS_PATH"), required=True, help=weights_help, type=Path
+    )
 
     clahe_kernel_size_help = (
         "Kernel size for contrast-limited adaptive histogram equalization. "
@@ -95,7 +192,7 @@ def main(args: Sequence[str] | None = None):
     parser_register.add_argument("--downsample_to", help=downsample_to_help, default=-1, type=float)
 
     synthmorph_mask_help = "Path to SynthMorph warp mask, of same shape as moving"
-    parser_register.add_argument("--synthmorph_mask", help=synthmorph_mask_help)
+    parser_register.add_argument("--synthmorph_mask", help=synthmorph_mask_help, default=None, type=Path)
 
     mirror_help = "Mirror warp. Axis selected automatically based on similarity"
     parser_register.add_argument("--mirror_warp", help=mirror_help, action="store_true")
@@ -107,7 +204,7 @@ def main(args: Sequence[str] | None = None):
     parser_register.add_argument("-f", "--force", help=force_help, action="store_true")
 
     log_help = "Desired log file. By default logs are written to output directory"
-    parser_register.add_argument("-l", "--log", help=log_help, default=None)
+    parser_register.add_argument("-l", "--log", help=log_help, type=Path)
 
     verbose_help = "Print info to stdout. By default, only errors are emitted."
     parser_register.add_argument("-v", "--verbose", help=verbose_help, action="store_true")
@@ -117,10 +214,10 @@ def main(args: Sequence[str] | None = None):
     # ======================================= #
 
     alignment_path_help = 'Absolute path to BIFROST registration RESULTS_DIR. Must contain a "transform.h5" file'
-    parser_transform.add_argument("alignment_path", help=alignment_path_help)
+    parser_transform.add_argument("alignment_path", help=alignment_path_help, type=Path)
 
     image_path_help = "Absolute path to image to transform"
-    parser_transform.add_argument("image_path", help=image_path_help)
+    parser_transform.add_argument("image_path", help=image_path_help, type=Path)
 
     label_image_help = "Set if image is a label image (ROIs). Uses interpolation methods that preserve labels"
     parser_transform.add_argument("--label_image", help=label_image_help, action="store_true")
@@ -139,7 +236,7 @@ def main(args: Sequence[str] | None = None):
     parser_transform.add_argument("--result_name", help=result_name_help, type=str)
 
     log_help = "Desired log file. By default logs are written to output directory."
-    parser_transform.add_argument("-l", "--log", help=log_help, default=None)
+    parser_transform.add_argument("-l", "--log", help=log_help, type=Path)
 
     verbose_help = "Print info to stdout. By default, only errors are emitted."
     parser_transform.add_argument("-v", "--verbose", help=verbose_help, action="store_true")
@@ -149,17 +246,17 @@ def main(args: Sequence[str] | None = None):
     # ======================================= #
 
     input_path_help = "Absolute path(s) to structural images or directorie(s) containing them. NIfTIs only"
-    parser_build_template.add_argument("--input", help=input_path_help, required=True, nargs="+")
+    parser_build_template.add_argument("--input", help=input_path_help, required=True, nargs="+", type=Path)
 
     output_path_help = "Absolute path to output directory, created"
-    parser_build_template.add_argument("--output", help=output_path_help, required=True)
+    parser_build_template.add_argument("--output", help=output_path_help, required=True, type=Path)
 
     reference_image_help = (
         "Absolute path to reference image used as fixed for the first alignment step. "
         "Should be symmetrical across the x axis. Thereafter the mean from the previous step is used as fixed. "
         "If not specified an image is chosen arbitarily."
     )
-    parser_build_template.add_argument("--reference_image", help=reference_image_help)
+    parser_build_template.add_argument("--reference_image", help=reference_image_help, type=Path)
 
     affine_steps_help = "Number of affine alignment steps"
     parser_build_template.add_argument("--affine_steps", help=affine_steps_help, default=1, type=int)
@@ -195,7 +292,7 @@ def main(args: Sequence[str] | None = None):
     parser_build_template.add_argument("--keep_intermediates", help=keep_intermediates_help, action="store_true")
 
     log_help = "Desired log file. By default logs are written to output directory"
-    parser_build_template.add_argument("-l", "--log", help=log_help, default=None)
+    parser_build_template.add_argument("-l", "--log", help=log_help, type=Path)
 
     verbose_help = "Print info to stdout. By default, only errors are emitted."
     parser_build_template.add_argument("-v", "--verbose", help=verbose_help, action="store_true")

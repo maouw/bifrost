@@ -3,7 +3,6 @@
 Execute using the 'bifrost' executable installed by setuptools
 """
 
-import argparse
 import logging
 import os
 import shutil
@@ -18,12 +17,12 @@ from skimage.exposure import equalize_adapthist
 from skimage.filters import threshold_triangle as triangle
 from sklearn.preprocessing import quantile_transform
 
+from bifrost.cli.bifrost import BuildTemplateArgs
 from bifrost.io import guarded_ants_image_read
 from bifrost.util import sha256, update_image_array
-from pathlib import Path
 
 
-def build_template(args: argparse.Namespace) -> None:
+def build_template(args: BuildTemplateArgs) -> None:
     # ========================================================================== #
     #                      PARSE ARGS, CONFIGURE LOGGER                          #
     # ========================================================================== #
@@ -85,7 +84,9 @@ def build_template(args: argparse.Namespace) -> None:
             elif args.preemptible:
                 logger.info("Resuming existing work")
             else:
-                logger.warning("Results directory already exists. Run again with --force to override or --preemptible to resume")
+                logger.warning(
+                    "Results directory already exists. Run again with --force to override or --preemptible to resume"
+                )
                 return
 
         os.makedirs(args.output, exist_ok=True)
@@ -125,7 +126,7 @@ def build_template(args: argparse.Namespace) -> None:
 
         for input_path in input_paths:
             name = os.path.basename(input_path).split(".")[0]
-            output_path = f"{args.output}/preprocessed/{sha256(input_path.encode())}_{name}.nii"
+            output_path = f"{args.output}/preprocessed/{sha256(str(input_path).encode())}_{name}.nii"
 
             if not os.path.exists(output_path):
                 logger.info("Preprocessing %s", input_path)
@@ -274,7 +275,7 @@ def generate_template(args, step_name, output_path, transform_avg):
     logger = logging.getLogger(__name__)
     __retries = 0
 
-    assert output_path.endswith(".nii")
+    assert str(output_path).endswith(".nii")
 
     while True:
         try:
@@ -313,7 +314,7 @@ def generate_template(args, step_name, output_path, transform_avg):
             # average images directly
             else:
                 template = __average_images(f"{input_path}/*.nii")
-                ants.image_write(template, output_path)
+                ants.image_write(template, str(output_path))
 
             break
         except Exception as exc:
@@ -346,7 +347,7 @@ def alignment_iteration(
         logger.info(f"{step_name} template already exists")
         return
 
-    fixed = ants.image_read(fixed_path)
+    fixed = ants.image_read(str(fixed_path))
 
     for input_path in glob(f"{moving_dir}/*.nii"):
         input_name = None
@@ -360,10 +361,14 @@ def alignment_iteration(
                 else:
                     logger.info("%s: processing %s", step_name, input_name)
 
-                    moving = ants.image_read(input_path)
+                    moving = ants.image_read(str(input_path))
 
                     registration = ants.registration(
-                        fixed, moving, type_of_transform=type_of_transform, verbose=args.verbose, outprefix=f"{step_dir}/{input_name}"
+                        fixed,
+                        moving,
+                        type_of_transform=type_of_transform,
+                        verbose=args.verbose,
+                        outprefix=f"{step_dir}/{input_name}",
                     )
 
                     __write_step_output(
@@ -387,7 +392,11 @@ def alignment_iteration(
                         moving_mirror = update_image_array(moving, moving[::-1])
 
                         registration_mirror = ants.registration(
-                            fixed, moving_mirror, type_of_transform=type_of_transform, verbose=args.verbose, outprefix=f"{step_dir}/{input_name}_m"
+                            fixed,
+                            moving_mirror,
+                            type_of_transform=type_of_transform,
+                            verbose=args.verbose,
+                            outprefix=f"{step_dir}/{input_name}_m",
                         )
 
                         __write_step_output(
@@ -425,7 +434,7 @@ def alignment_iteration(
 def __average_images(pattern):
     img_paths = glob(pattern)
 
-    img_0 = ants.image_read(img_paths[0])
+    img_0 = ants.image_read(str(img_paths[0]))
     avg_img = img_0.numpy() / len(img_paths)
 
     for img_path in img_paths[1:]:

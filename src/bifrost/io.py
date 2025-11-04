@@ -2,15 +2,18 @@
 
 import hashlib
 import json
-import logging
 from pathlib import Path
+from typing import Any
 
 import ants
 import h5py
 import numpy as np
+from ants import ANTsImage, ANTsTransform
+
+from bifrost.types import Pathable
 
 
-def write_affine(h5_handle: h5py.File, name: str, transform: ants.ANTsTransform | str | Path) -> None:
+def write_affine(h5_handle: h5py.File, name: str, transform: ANTsTransform | str) -> None:
     """Write ANTs affine transform to h5.
 
     Args:
@@ -22,16 +25,15 @@ def write_affine(h5_handle: h5py.File, name: str, transform: ants.ANTsTransform 
         None
 
     """
-    if isinstance(transform, (str | Path)):
-        transform = ants.read_transform(str(transform))
-    assert isinstance(transform, ants.ANTsTransform), "transform must be an ANTsTransform or a path to a .mat file"
-    name = str(name)
+    if isinstance(transform, str):
+        transform = ants.read_transform(transform)
+    assert isinstance(transform, ANTsTransform), "transform must be an ANTsTransform or a path to a .mat file"
     h5_handle.create_group(name)
     h5_handle.create_dataset(f"{name}/parameters", data=transform.parameters)
     h5_handle.create_dataset(f"{name}/fixed_parameters", data=transform.fixed_parameters)
 
 
-def read_affine(h5_handle: h5py.File, name: str | Path, directory: str | Path | None = None) -> ants.ANTsTransform | str:
+def read_affine(h5_handle: h5py.File, name: str, directory: Pathable = None) -> ANTsTransform | str:
     """Read ANTs affine transform from h5.
 
     If directory is not None, writes to a file and returns absolute path
@@ -51,7 +53,7 @@ def read_affine(h5_handle: h5py.File, name: str | Path, directory: str | Path | 
     transform.set_fixed_parameters(h5_handle[f"{name}/fixed_parameters"][:])
 
     transform = ants.create_ants_transform()
-    assert isinstance(transform, ants.ANTsTransform)
+    assert isinstance(transform, ANTsTransform)
     assert isinstance(h5_handle, h5py.File)
     transform.set_parameters(h5_handle[f"{name}/parameters"][:])
     transform.set_fixed_parameters(h5_handle[f"{name}/fixed_parameters"][:])
@@ -66,14 +68,16 @@ def read_affine(h5_handle: h5py.File, name: str | Path, directory: str | Path | 
         raise NotADirectoryError(f"{directory} is not a directory")
     transform_path = directory / "aff.mat"
     if transform_path.exists():
-        raise FileExistsError(f"Transform file {transform_path} already exists. Please choose a different directory or remove the existing file.")
+        raise FileExistsError(
+            f"Transform file {transform_path} already exists. Please choose a different directory or remove the existing file."
+        )
 
     ants.write_transform(transform, str(transform_path))
 
     return str(transform_path)
 
 
-def write_image(h5_handle: h5py.File, name: str | Path, image: ants.ANTsImage | str | Path) -> None:
+def write_image(h5_handle: h5py.File, name: str | Path, image: ANTsImage | str | Path) -> None:
     """Writes ANTs image to h5.
 
     Args:
@@ -82,7 +86,7 @@ def write_image(h5_handle: h5py.File, name: str | Path, image: ants.ANTsImage | 
         image: if str interpreted as path to image file - ANTsImage or str
     """
     name = name if isinstance(name, str) else str(name)
-    image = image if isinstance(image, ants.ANTsImage) else ants.image_read(str(image))
+    image = image if isinstance(image, ANTsImage) else ants.image_read(str(image))
     image_arr = image.numpy()
     h5_handle.create_dataset(
         name,
@@ -99,7 +103,7 @@ def write_image(h5_handle: h5py.File, name: str | Path, image: ants.ANTsImage | 
     h5_handle[name].attrs["has_components"] = image.has_components
 
 
-def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | None = None) -> ants.ANTsImage | str:
+def read_image(h5_handle: h5py.File, name: Pathable, directory: Pathable | None = None) -> ANTsImage | Path:
     """Reads ANTs image from h5.
 
     If directory is not None, writes to a file and returns absolute path
@@ -114,6 +118,9 @@ def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | N
     Returns:
         image - ants.ANTs.Image
     """
+    name = str(name)
+    if directory is not None:
+        directory = Path(directory)
     dset = h5_handle[str(name)]  # type: ignore
     image = ants.from_numpy(
         dset[:],
@@ -124,14 +131,25 @@ def read_image(h5_handle: h5py.File, name: str | Path, directory: str | Path | N
     )
     if directory is None:
         return image
-    img_path = Path(directory) / "image.nii"
+    img_path = Path(directory, "image.nii")
     if img_path.exists():
-        raise FileExistsError(f"Image file {img_path} already exists. Please choose a different directory or remove the existing file.")
+        raise FileExistsError(
+            f"Image file {img_path} already exists. Please choose a different directory or remove the existing file."
+        )
     ants.image_write(image, str(img_path))
-    return str(img_path)
+    return Path(img_path)
 
 
-def guarded_ants_image_read(image_path: str | Path) -> ants.ANTsImage:
+def check_ants_header(filename: Pathable) -> dict[str, Any]:
+    hdr = ants.core.ants_image_io.image_header_info(str(filename))
+    if not hdr:
+        raise ValueError(f"Image file {filename} does not have an ANTsImage header")
+    if int(hdr.get("nComponents", 1)) > 1:
+        raise ValueError("Multi-channel images not supported. Please plit into per-channel images.")
+    return hdr
+
+
+def guarded_ants_image_read(image_path: Pathable) -> ANTsImage:
     """Reads an ANTs image using ants.image_read.
 
     Raises an exception for multi-channel images.
@@ -146,16 +164,11 @@ def guarded_ants_image_read(image_path: str | Path) -> ants.ANTsImage:
         image: ANTsImage object
 
     """
-    image = ants.image_read(str(image_path))
-    if image.components > 1:
-        logger = logging.getLogger(__name__)
-        msg = f"{image_path} has multiple channels. Multi-channel images are not supported by bifrost, split into per-channel images"
-        logger.critical(msg)
-        raise RuntimeError(msg)
-    return image
+    check_ants_header(image_path)
+    return ants.image_read(str(image_path))
 
 
-def md5sum(filename: str | Path, chunk_size: int = 8192) -> str:
+def md5sum(filename: Pathable, chunk_size: int = 8192) -> str:
     """Compute the md5sum of a file.
 
     Args:
@@ -166,13 +179,13 @@ def md5sum(filename: str | Path, chunk_size: int = 8192) -> str:
         md5 hash of the file as a hex string
     """
     file_hash = hashlib.md5()
-    with open(filename, "rb") as f:
+    with Path(filename).open("rb") as f:
         while chunk := f.read(chunk_size):
             file_hash.update(chunk)
     return file_hash.hexdigest()
 
 
-def read_weights_inshape(path: str | Path) -> tuple[int, int, int]:
+def read_weights_inshape(path: Pathable) -> tuple[int, int, int]:
     """Reads the 'inshape' configuration from a model weights HDF5 file.
 
     Args:
